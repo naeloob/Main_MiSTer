@@ -15,6 +15,7 @@
 #include <linux/uinput.h>
 #include <sys/time.h>
 #include <sys/types.h>
+#include <stdarg.h>
 
 #include "input.h"
 #include "user_io.h"
@@ -992,11 +993,14 @@ enum QUIRK
 	QUIRK_DS4TOUCH,
 	QUIRK_MADCATZ360,
 	QUIRK_PDSP,
+	QUIRK_PDSP_ARCADE,
 };
 
 typedef struct
 {
 	uint16_t vid, pid;
+	char     idstr[256];
+
 	uint8_t  led;
 	uint8_t  mouse;
 	uint8_t  axis_edge[256];
@@ -1231,15 +1235,15 @@ int get_map_cancel()
 static char *get_map_name(int dev, int def)
 {
 	static char name[128];
-	if (def || is_menu_core()) sprintf(name, "input_%04x_%04x_v3.map", input[dev].vid, input[dev].pid);
-	else sprintf(name, "%s_input_%04x_%04x_v3.map", user_io_get_core_name_ex(), input[dev].vid, input[dev].pid);
+	if (def || is_menu_core()) sprintf(name, "input_%s_v3.map", input[dev].idstr);
+	else sprintf(name, "%s_input_%s_v3.map", user_io_get_core_name_ex(), input[dev].idstr);
 	return name;
 }
 
 static char *get_kbdmap_name(int dev)
 {
 	static char name[128];
-	sprintf(name, "kbd_%04x_%04x.map", input[dev].vid, input[dev].pid);
+	sprintf(name, "kbd_%s.map", input[dev].idstr);
 	return name;
 }
 
@@ -1768,13 +1772,16 @@ static void input_cb(struct input_event *ev, struct input_absinfo *absinfo, int 
 
 	if (!input[dev].has_mmap)
 	{
-		if (!FileLoadJoymap(get_map_name(dev, 1), &input[dev].mmap, sizeof(input[dev].mmap)))
+		if (input[dev].quirk != QUIRK_PDSP)
 		{
-			memset(input[dev].mmap, 0, sizeof(input[dev].mmap));
-			input[dev].has_mmap++;
+			if (!FileLoadJoymap(get_map_name(dev, 1), &input[dev].mmap, sizeof(input[dev].mmap)))
+			{
+				memset(input[dev].mmap, 0, sizeof(input[dev].mmap));
+				input[dev].has_mmap++;
+			}
+			if (!input[dev].mmap[SYS_BTN_OSD_KTGL + 2]) input[dev].mmap[SYS_BTN_OSD_KTGL + 2] = input[dev].mmap[SYS_BTN_OSD_KTGL + 1];
 		}
 		input[dev].has_mmap++;
-		if (!input[dev].mmap[SYS_BTN_OSD_KTGL + 2]) input[dev].mmap[SYS_BTN_OSD_KTGL + 2] = input[dev].mmap[SYS_BTN_OSD_KTGL + 1];
 	}
 
 	if (!input[dev].has_map)
@@ -1782,9 +1789,7 @@ static void input_cb(struct input_event *ev, struct input_absinfo *absinfo, int 
 		if (input[dev].quirk == QUIRK_PDSP)
 		{
 			memset(input[dev].map, 0, sizeof(input[dev].map));
-			input[dev].map[SYS_BTN_A]  = 0x01220120;
-			input[dev].map[SPIN_LEFT]  = 0x123;
-			input[dev].map[SPIN_RIGHT] = 0x124;
+			input[dev].map[SYS_BTN_A]  = 0x120;
 		}
 		else if (!FileLoadJoymap(get_map_name(dev, 0), &input[dev].map, sizeof(input[dev].map)))
 		{
@@ -1865,6 +1870,17 @@ static void input_cb(struct input_event *ev, struct input_absinfo *absinfo, int 
 			spi_uio_cmd(UIO_KEYBOARD); //ping the Menu core to wakeup
 			osd_event = 0;
 		}
+
+		if (input[dev].quirk == QUIRK_PDSP_ARCADE)
+		{
+			if (ev->type == EV_KEY)
+			{
+				if (ev->code == 0x120 || ev->code == 0x121) return;
+			}
+		}
+
+		// paddle axis
+		if ((ev->type == EV_ABS || ev->type == EV_REL) && (ev->code == 7 || ev->code == 8)) return;
 
 		if (ev->type == EV_KEY && mapping_button>=0 && !osd_event)
 		{
@@ -2463,13 +2479,13 @@ static void input_cb(struct input_event *ev, struct input_absinfo *absinfo, int 
 				if (ev->value < absinfo->minimum) value = absinfo->minimum;
 				else if (ev->value > absinfo->maximum) value = absinfo->maximum;
 
-				if (input[dev].quirk == QUIRK_PDSP)
+				if (ev->code == 8)
 				{
-					if (input[dev].num)
+					if (input[dev].num && input[dev].num <= NUMPLAYERS)
 					{
 						value -= absinfo->minimum;
 						value = (value * 255) / (absinfo->maximum - absinfo->minimum);
-						user_io_analog_joystick(((input[dev].num - 1) << 4) | 7, value, 0);
+						user_io_analog_joystick(((input[dev].num - 1) << 4) | 0xF, value, 0);
 					}
 					break;
 				}
@@ -2543,6 +2559,44 @@ static void input_cb(struct input_event *ev, struct input_absinfo *absinfo, int 
 					//printf("analog_y = %d\n", offset);
 					joy_analog(input[dev].num, 1, offset);
 					return;
+				}
+			}
+			break;
+
+		// spinner
+		case EV_REL:
+			if (!user_io_osd_is_visible() && ev->code == 7)
+			{
+				// paddles/spinners overlay on top of other gamepad
+				if (input[dev].quirk == QUIRK_PDSP && !input[dev].num)
+				{
+					for (uint8_t num = 1; num < NUMDEV + 1; num++)
+					{
+						int found = 0;
+						for (int i = 0; i < NUMDEV; i++)
+						{
+							if (input[dev].quirk == QUIRK_PDSP)
+							{
+								found = (input[i].num == num);
+								if (found) break;
+							}
+						}
+
+						if (!found)
+						{
+							input[dev].num = num;
+							break;
+						}
+					}
+				}
+
+				if (input[dev].num && input[dev].num <= NUMPLAYERS)
+				{
+					int value = ev->value;
+					if (ev->value < -128) value = -128;
+					else if (ev->value > 127) value = 127;
+
+					user_io_analog_joystick(((input[dev].num - 1) << 4) | 0x8F, value, 0);
 				}
 			}
 			break;
@@ -2623,6 +2677,9 @@ void mergedevs()
 	// merge multifunctional devices by id
 	for (int i = 0; i < NUMDEV; i++)
 	{
+		// Raphnet uses buggy firmware, don't merge it.
+		if (input[i].vid == 0x289B) continue;
+
 		input[i].bind = i;
 		if (input[i].id[0] && !input[i].mouse)
 		{
@@ -2649,6 +2706,7 @@ void mergedevs()
 				input[i].pid = input[j].pid;
 				input[i].quirk = input[j].quirk;
 				memcpy(input[i].name, input[j].name, sizeof(input[i].name));
+				memcpy(input[i].idstr, input[j].idstr, sizeof(input[i].idstr));
 				break;
 			}
 		}
@@ -2812,8 +2870,34 @@ int input_test(int getchar)
 						//Madcatz Arcade Stick 360
 						if (input[n].vid == 0x0738 && input[n].pid == 0x4758) input[n].quirk = QUIRK_MADCATZ360;
 
-						//mr.Spinner
-						if (!strcasecmp(uniq, "MiSTer PD/SP v1")) input[n].quirk = QUIRK_PDSP;
+						// mr.Spinner
+						// 0x120  - Button
+						// Axis 7 - EV_REL is spinner
+						// Axis 8 - EV_ABS is Paddle
+						// Overlays on other existing gamepads
+						if (strstr(uniq, "MiSTer-S1")) input[n].quirk = QUIRK_PDSP;
+
+						// Arcade with spinner and/or paddle:
+						// Axis 7 - EV_REL is spinner
+						// Axis 8 - EV_ABS is Paddle
+						// Includes other buttons and axes, works as a full featured gamepad.
+						if (strstr(uniq, "MiSTer-A1")) input[n].quirk = QUIRK_PDSP_ARCADE;
+
+						//Arduino and Teensy devices may share the same VID:PID, so additional field UNIQ is used to differentiate them
+						if ((input[n].vid == 0x2341 || (input[n].vid == 0x16C0 && (input[n].pid>>8) == 0x4)) && strlen(uniq))
+						{
+							snprintf(input[n].idstr, sizeof(input[n].idstr), "%04x_%04x_%s", input[n].vid, input[n].pid, uniq);
+							char *p;
+							while ((p = strchr(input[n].idstr, '/'))) *p = '_';
+							while ((p = strchr(input[n].idstr, ' '))) *p = '_';
+							while ((p = strchr(input[n].idstr, '*'))) *p = '_';
+							while ((p = strchr(input[n].idstr, ':'))) *p = '_';
+							strcpy(input[n].name, uniq);
+						}
+						else
+						{
+							snprintf(input[n].idstr, sizeof(input[n].idstr), "%04x_%04x", input[n].vid, input[n].pid);
+						}
 
 						ioctl(pool[n].fd, EVIOCGRAB, (grabbed | user_io_osd_is_visible()) ? 1 : 0);
 
@@ -2903,9 +2987,9 @@ int input_test(int getchar)
 												else if ((input[i].misc_flags & 0x6) == 2) input[i].misc_flags = 0x5; // Y
 												else input[i].misc_flags = 0x1; // None
 
-												Info(((input[i].misc_flags & 0x6) == 2) ? "Paddle: X" :
-													((input[i].misc_flags & 0x6) == 4) ? "Paddle: Y" :
-													"Paddle: Off");
+												Info(((input[i].misc_flags & 0x6) == 2) ? "Paddle mode" :
+													((input[i].misc_flags & 0x6) == 4) ? "Spinner mode" :
+													"Normal mode");
 											}
 											continue;
 										}
@@ -2914,30 +2998,6 @@ int input_test(int getchar)
 
 								if (ev.type == EV_ABS)
 								{
-									if (input[i].quirk == QUIRK_MADCATZ360 && (input[i].misc_flags & 0x6))
-									{
-										//disable original analog axis to avoid conflicts
-										if (ev.code <= 1) continue;
-
-										if (ev.code == 16)
-										{
-											if (ev.value)
-											{
-												if (ev.value > 0) input[i].mc_a += 8;
-												if (ev.value < 0) input[i].mc_a -= 8;
-
-												if (input[i].mc_a > 128) input[i].mc_a = 128;
-												if (input[i].mc_a < -128) input[i].mc_a = -128;
-
-												ev.code = (input[i].misc_flags >> 2) & 1;
-												ev.value = input[i].mc_a * 256;
-												if (ev.value > 32767) ev.value = 32767;
-												//printf("** %d - %d\n", ev.code, ev.value);
-											}
-											else continue;
-										}
-									}
-
 									if (input[i].quirk == QUIRK_WIIMOTE)
 									{
 										//nunchuck accel events
@@ -3013,6 +3073,32 @@ int input_test(int getchar)
 										}
 									}
 
+									if (input[i].quirk == QUIRK_MADCATZ360 && (input[i].misc_flags & 0x6) && (ev.code == 16) && !user_io_osd_is_visible())
+									{
+										if (ev.value)
+										{
+											if ((input[i].misc_flags & 0x6) == 2)
+											{
+												if (ev.value > 0) input[i].mc_a += 4;
+												if (ev.value < 0) input[i].mc_a -= 4;
+
+												if (input[i].mc_a > 256) input[i].mc_a = 256;
+												if (input[i].mc_a < 0)   input[i].mc_a = 0;
+
+												absinfo.maximum = 255;
+												absinfo.minimum = 0;
+												ev.code = 8;
+												ev.value = input[i].mc_a;
+											}
+											else
+											{
+												ev.type = EV_REL;
+												ev.code = 7;
+											}
+										}
+										else continue;
+									}
+
 									if (input[i].quirk == QUIRK_CWIID)
 									{
 										if (ev.code == 3 || ev.code == 4)
@@ -3075,7 +3161,15 @@ int input_test(int getchar)
 										break;
 
 									case EV_REL:
-										printf("Input event: type=EV_REL, Axis=%d, Offset=%d, jnum=%d, ID:%04x:%04x:%02d\n", ev.code, ev.value, input[dev].num, input[dev].vid, input[dev].pid, i);
+										{
+											//limit the amount of EV_REL messages, so Menu core won't be laggy
+											static unsigned long timeout = 0;
+											if (!timeout || CheckTimer(timeout))
+											{
+												timeout = GetTimer(20);
+												printf("Input event: type=EV_REL, Axis=%d, Offset=%d, jnum=%d, ID:%04x:%04x:%02d\n", ev.code, ev.value, input[dev].num, input[dev].vid, input[dev].pid, i);
+											}
+										}
 										break;
 
 									case EV_SYN:
@@ -3084,23 +3178,32 @@ int input_test(int getchar)
 
 										//analog joystick
 									case EV_ABS:
-										//reduce flood from DUALSHOCK 3/4
-										if ((input[i].quirk == QUIRK_DS4 || input[i].quirk == QUIRK_DS3) && ev.code <= 5 && ev.value > 118 && ev.value < 138)
 										{
-											break;
-										}
+											//limit the amount of EV_ABS messages, so Menu core won't be laggy
+											static unsigned long timeout = 0;
+											if (!timeout || CheckTimer(timeout))
+											{
+												timeout = GetTimer(20);
 
-										//aliexpress USB encoder floods messages
-										if (input[dev].vid == 0x0079 && input[dev].pid == 0x0006)
-										{
-											if (ev.code == 2) break;
-										}
+												//reduce flood from DUALSHOCK 3/4
+												if ((input[i].quirk == QUIRK_DS4 || input[i].quirk == QUIRK_DS3) && ev.code <= 5 && ev.value > 118 && ev.value < 138)
+												{
+													break;
+												}
 
-										printf("Input event: type=EV_ABS, Axis=%d, Offset=%d, jnum=%d, ID:%04x:%04x:%02d,", ev.code, ev.value, input[dev].num, input[dev].vid, input[dev].pid, i);
-										printf(" abs_min = %d, abs_max = %d", absinfo.minimum, absinfo.maximum);
-										if (absinfo.fuzz) printf(", fuzz = %d", absinfo.fuzz);
-										if (absinfo.resolution) printf(", res = %d", absinfo.resolution);
-										printf("\n");
+												//aliexpress USB encoder floods messages
+												if (input[dev].vid == 0x0079 && input[dev].pid == 0x0006)
+												{
+													if (ev.code == 2) break;
+												}
+
+												printf("Input event: type=EV_ABS, Axis=%d, Offset=%d, jnum=%d, ID:%04x:%04x:%02d,", ev.code, ev.value, input[dev].num, input[dev].vid, input[dev].pid, i);
+												printf(" abs_min = %d, abs_max = %d", absinfo.minimum, absinfo.maximum);
+												if (absinfo.fuzz) printf(", fuzz = %d", absinfo.fuzz);
+												if (absinfo.resolution) printf(", res = %d", absinfo.resolution);
+												printf("\n");
+											}
+										}
 										break;
 
 									default:
