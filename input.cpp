@@ -1177,6 +1177,35 @@ int toggle_kbdled(int mask)
 	return state;
 }
 
+#define JOYMAP_DIR  CONFIG_DIR"/inputs/"
+
+static int load_map(const char *name, void *pBuffer, int size)
+{
+	char path[256] = { JOYMAP_DIR };
+	strcat(path, name);
+	int ret = FileLoad(path, pBuffer, size);
+	if (!ret) return FileLoadConfig(name, pBuffer, size);
+	return ret;
+}
+
+static void delete_map(const char *name)
+{
+	char path[256] = { JOYMAP_DIR };
+	FileCreatePath(path);
+	strcat(path, name);
+	FileDelete(name);
+	FileDelete(path);
+}
+
+static int save_map(const char *name, void *pBuffer, int size)
+{
+	char path[256] = { JOYMAP_DIR };
+	FileCreatePath(path);
+	strcat(path, name);
+	FileDelete(name);
+	return FileSave(path, pBuffer, size);
+}
+
 static int mapping = 0;
 static int mapping_button;
 static int mapping_dev = -1;
@@ -1255,6 +1284,7 @@ void finish_map_setting(int dismiss)
 	if (mapping_type == 2)
 	{
 		if (dismiss) input[mapping_dev].has_kbdmap = 0;
+		else if (dismiss == 2) FileDeleteConfig(get_kbdmap_name(mapping_dev));
 		else FileSaveConfig(get_kbdmap_name(mapping_dev), &input[mapping_dev].kbdmap, sizeof(input[mapping_dev].kbdmap));
 	}
 	else if (mapping_type == 3)
@@ -1265,7 +1295,8 @@ void finish_map_setting(int dismiss)
 	{
 		for (int i = 0; i < NUMDEV; i++) input[i].has_map = 0;
 
-		if (!dismiss) FileSaveJoymap(get_map_name(mapping_dev, 0), &input[mapping_dev].map, sizeof(input[mapping_dev].map));
+		if (!dismiss) save_map(get_map_name(mapping_dev, 0), &input[mapping_dev].map, sizeof(input[mapping_dev].map));
+		if (dismiss == 2) delete_map(get_map_name(mapping_dev, 0));
 		if (is_menu_core()) input[mapping_dev].has_mmap = 0;
 	}
 }
@@ -1774,7 +1805,7 @@ static void input_cb(struct input_event *ev, struct input_absinfo *absinfo, int 
 	{
 		if (input[dev].quirk != QUIRK_PDSP)
 		{
-			if (!FileLoadJoymap(get_map_name(dev, 1), &input[dev].mmap, sizeof(input[dev].mmap)))
+			if (!load_map(get_map_name(dev, 1), &input[dev].mmap, sizeof(input[dev].mmap)))
 			{
 				memset(input[dev].mmap, 0, sizeof(input[dev].mmap));
 				input[dev].has_mmap++;
@@ -1791,7 +1822,7 @@ static void input_cb(struct input_event *ev, struct input_absinfo *absinfo, int 
 			memset(input[dev].map, 0, sizeof(input[dev].map));
 			input[dev].map[SYS_BTN_A]  = 0x120;
 		}
-		else if (!FileLoadJoymap(get_map_name(dev, 0), &input[dev].map, sizeof(input[dev].map)))
+		else if (!load_map(get_map_name(dev, 0), &input[dev].map, sizeof(input[dev].map)))
 		{
 			memset(input[dev].map, 0, sizeof(input[dev].map));
 			if (!is_menu_core())
@@ -1871,16 +1902,17 @@ static void input_cb(struct input_event *ev, struct input_absinfo *absinfo, int 
 			osd_event = 0;
 		}
 
-		if (input[dev].quirk == QUIRK_PDSP_ARCADE)
+		// paddle axis - skip from mapping
+		if ((ev->type == EV_ABS || ev->type == EV_REL) && (ev->code == 7 || ev->code == 8)) return;
+
+		// in alternative set, the first button can be skipped, so clear the set now
+		if (!mapping_button && mapping_set && ev->value == 1 && mapping_dev >= 0)
 		{
-			if (ev->type == EV_KEY)
+			for (uint i = 0; i < sizeof(input[0].map) / sizeof(input[0].map[0]); i++)
 			{
-				if (ev->code == 0x120 || ev->code == 0x121) return;
+				input[mapping_dev].map[i] &= 0x0000FFFF;
 			}
 		}
-
-		// paddle axis
-		if ((ev->type == EV_ABS || ev->type == EV_REL) && (ev->code == 7 || ev->code == 8)) return;
 
 		if (ev->type == EV_KEY && mapping_button>=0 && !osd_event)
 		{
@@ -1926,7 +1958,7 @@ static void input_cb(struct input_event *ev, struct input_absinfo *absinfo, int 
 			}
 			else
 			{
-				int clear = ev->code == KEY_F12 || ev->code == KEY_MENU || ev->code == KEY_HOMEPAGE;
+				int clear = (ev->code == KEY_F12 || ev->code == KEY_MENU || ev->code == KEY_HOMEPAGE) && !is_menu_core();
 				if (ev->value == 1 && mapping_dev < 0 && !clear)
 				{
 					mapping_dev = dev;
@@ -2601,6 +2633,20 @@ static void input_cb(struct input_event *ev, struct input_absinfo *absinfo, int 
 			}
 			break;
 		}
+	}
+}
+
+void send_map_cmd(int key)
+{
+	if (mapping && mapping_dev >= 0)
+	{
+		input_event ev;
+		ev.type = EV_KEY;
+		ev.code = key;
+		ev.value = 1;
+		input_cb(&ev, 0, mapping_dev);
+		ev.value = 0;
+		input_cb(&ev, 0, mapping_dev);
 	}
 }
 
