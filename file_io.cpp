@@ -638,7 +638,8 @@ int FileDelete(const char *name)
 	if (name[0] != '/') sprintf(full_path, "%s/%s", getRootDir(), name);
 	else strcpy(full_path, name);
 
-	return !unlink(name);
+	printf("delete %s\n", full_path);
+	return !unlink(full_path);
 }
 
 int FileLoad(const char *name, void *pBuffer, int size)
@@ -1582,3 +1583,10 @@ direntext_t* flist_SelectedItem()
 {
 	return &DirItem[iSelectedEntry];
 }
+
+bool isMraName(char *path)
+{
+        char *spl = strrchr(path, '.');
+        return (spl && !strcmp(spl, ".mra"));
+}
+
