@@ -35,7 +35,8 @@
 
 #include "support.h"
 
-static char core_path[1024];
+static char core_path[1024] = {};
+static char rbf_path[1024] = {};
 
 uint64_t contador = 0;
 uint64_t last_joy = 0x0;
@@ -535,10 +536,10 @@ const char* get_rbf_path()
 
 void MakeFile(const char * filename, const char * data)
 {
-        FILE * file;
-        file = fopen(filename, "w");
-        fwrite(data, strlen(data), 1, file);
-        fclose(file);
+	FILE * file;
+	file = fopen(filename, "w");
+	fwrite(data, strlen(data), 1, file);
+	fclose(file);
 }
 
 int GetUARTMode()
@@ -562,18 +563,18 @@ int GetMidiLinkMode()
 
 void SetMidiLinkMode(int mode)
 {
-        MakeFile("/tmp/CORENAME", user_io_get_core_name_ex());
-        remove("/tmp/ML_FSYNTH");
-        remove("/tmp/ML_MUNT");
-        remove("/tmp/ML_UDP");
-        remove("/tmp/ML_TCP");
-        switch (mode)
-        {
-        case 0: MakeFile("/tmp/ML_FSYNTH", ""); break;
-        case 1: MakeFile("/tmp/ML_MUNT", ""); break;
-        case 2: MakeFile("/tmp/ML_TCP", ""); break;
-        case 3: MakeFile("/tmp/ML_UDP", ""); break;
-        }
+	MakeFile("/tmp/CORENAME", user_io_get_core_name_ex());
+	remove("/tmp/ML_FSYNTH");
+	remove("/tmp/ML_MUNT");
+	remove("/tmp/ML_UDP");
+	remove("/tmp/ML_TCP");
+	switch (mode)
+	{
+	case 0: MakeFile("/tmp/ML_FSYNTH", ""); break;
+	case 1: MakeFile("/tmp/ML_MUNT", ""); break;
+	case 2: MakeFile("/tmp/ML_TCP", ""); break;
+	case 3: MakeFile("/tmp/ML_UDP", ""); break;
+	}
 }
 
 uint16_t sdram_sz(int sz)
@@ -683,6 +684,8 @@ void user_io_init(const char *path, const char *xml)
 	// not the RBF. The RBF will be in arcade, which the user shouldn't
 	// browse
 	strcpy(core_path, xml ? xml : path);
+	strcpy(rbf_path, path);
+
 	if (xml) arcade_override_name(xml);
 
 	memset(sd_image, 0, sizeof(sd_image));
@@ -724,7 +727,7 @@ void user_io_init(const char *path, const char *xml)
 		user_io_8bit_set_status(UIO_STATUS_RESET, UIO_STATUS_RESET);
 	}
 
-	MiSTer_ini_parse();
+	cfg_parse();
 	if (cfg.bootcore[0] != '\0')
 	{
 		bootcore_init(xml ? xml : path);
@@ -734,7 +737,6 @@ void user_io_init(const char *path, const char *xml)
 	if(strlen(cfg.font)) LoadFont(cfg.font);
 	FileLoadConfig("Volume.dat", &vol_att, 1);
 	vol_att &= 0x1F;
-	if (!cfg.volumectl) vol_att = 0;
 	spi_uio_cmd8(UIO_AUDVOL, vol_att);
 	user_io_send_buttons(1);
 
@@ -2107,15 +2109,6 @@ void user_io_send_buttons(char force)
 
 	if ((map != key_map) || force)
 	{
-		if ((key_map & (BUTTON1 | BUTTON2)) == BUTTON2 && (map & (BUTTON1 | BUTTON2)) == (BUTTON1 | BUTTON2) && is_menu_core())
-		{
-			if (FileExists(ini_cfg.filename_alt))
-			{
-				altcfg(altcfg() ? 0 : 1);
-				fpga_load_rbf("menu.rbf");
-			}
-		}
-
 		const char *name = get_rbf_path();
 		if (name[0] && (get_key_mod() & (LGUI | LSHIFT)) == (LGUI | LSHIFT) && (key_map & BUTTON2) && !(map & BUTTON2))
 		{
@@ -2127,7 +2120,7 @@ void user_io_send_buttons(char force)
 		}
 
 		//special reset for some cores
-		if ((key_map & BUTTON2) && !(map & BUTTON2))
+		if (!user_io_osd_is_visible() && (key_map & BUTTON2) && !(map & BUTTON2))
 		{
 			if (is_archie_core()) fpga_load_rbf(name[0] ? name : "Archie.rbf");
 			if (is_minimig()) minimig_reset();
@@ -2141,6 +2134,25 @@ void user_io_send_buttons(char force)
 		if ((key_map & BUTTON2) && is_x86_core()) x86_init();
 	}
 }
+
+void user_io_set_ini(int ini_num)
+{
+	const char *name = rbf_path;
+	const char *xml = strcasecmp(rbf_path, core_path) ? core_path : NULL;
+
+	if (!name[0])
+	{
+		name = "menu.rbf";
+		xml = NULL;
+	}
+
+	if (FileExists(cfg_get_name(ini_num)))
+	{
+		altcfg(ini_num);
+		fpga_load_rbf(name, NULL, xml);
+	}
+}
+
 
 static uint32_t diskled_timer = 0;
 static uint32_t diskled_is_on = 0;
@@ -3124,8 +3136,6 @@ int get_volume()
 
 void set_volume(int cmd)
 {
-	if (!cfg.volumectl) return;
-
 	vol_set_timeout = GetTimer(1000);
 
 	vol_att &= 0x17;
