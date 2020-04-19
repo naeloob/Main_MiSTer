@@ -128,7 +128,7 @@ static void handle_acsi(unsigned char *buffer)
 	unsigned char cmd = buffer[0];
 	unsigned long lba = 256 * 256 * (buffer[1] & 0x1f) +
 		256 * buffer[2] + buffer[3];
-	unsigned short length = buffer[4];
+	unsigned int length = buffer[4];
 	if (length == 0) length = 256;
 
 	if (0)
@@ -480,7 +480,7 @@ static void tos_select_hdd_image(int i, const char *name)
 	}
 	else
 	{
-		if (FileOpen(&hdd_image[i], name))
+		if (FileOpenEx(&hdd_image[i], name, (O_RDWR | O_SYNC)))
 		{
 			config.system_ctrl |= (TOS_ACSI0_ENABLE << i);
 		}
@@ -492,7 +492,24 @@ static void tos_select_hdd_image(int i, const char *name)
 
 void tos_insert_disk(int index, const char *name)
 {
-	if (index <= 1) user_io_file_mount(name, index);
+	static int wpins = 0;
+
+	if (index <= 1)
+	{
+		user_io_file_mount(name, index);
+		if (tos_disk_is_inserted(index))
+		{
+			if (!index) wpins &= ~TOS_CONTROL_FDC_WR_PROT_A;
+			else wpins &= ~TOS_CONTROL_FDC_WR_PROT_B;
+		}
+		else
+		{
+			if (!index) wpins |= TOS_CONTROL_FDC_WR_PROT_A;
+			else wpins |= TOS_CONTROL_FDC_WR_PROT_B;
+		}
+
+		set_control(config.system_ctrl ^ (wpins & (TOS_CONTROL_FDC_WR_PROT_A | TOS_CONTROL_FDC_WR_PROT_B)));
+	}
 	else tos_select_hdd_image(index & 1, name);
 }
 
