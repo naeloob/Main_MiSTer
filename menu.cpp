@@ -1175,8 +1175,7 @@ void HandleUI(void)
 		OsdSetTitle(user_io_get_core_name(), OSD_ARROW_RIGHT | OSD_ARROW_LEFT);
 
 		m = 0;
-		menumask = 0x3ff;
-		OsdWrite(m++);
+		menumask = 0x7ff;
 
 		strcpy(s, " Floppy 0: ");
 		strncat(s, get_image_name(0) ? get_image_name(0) : "* no disk *",27);
@@ -1217,10 +1216,13 @@ void HandleUI(void)
 		OsdWrite(m++, s, menusub == 7);
 		sprintf(s, " Swap mouse btn 2/3: %s", archie_get_mswap() ? "Yes" : "No");
 		OsdWrite(m++, s, menusub == 8);
+		sprintf(s, " UserIO Joys: ");
+		strcat(s, config_db9type_msg[archie_get_db9mode()]);
+		OsdWrite(m++, s, menusub == 9);
 
 		while(m<15) OsdWrite(m++);
 
-		OsdWrite(15, STD_EXIT, menusub == 9, 0);
+		OsdWrite(15, STD_EXIT, menusub == 10, 0);
 		menustate = MENU_ARCHIE_MAIN2;
 		parentstate = MENU_ARCHIE_MAIN1;
 
@@ -1290,7 +1292,23 @@ void HandleUI(void)
 				menustate = MENU_ARCHIE_MAIN1;
 				break;
 
-			case 9:  // Exit
+			case 9:
+				switch (archie_get_db9mode())
+				{
+				case 0:
+					archie_set_db9mode(2);
+					break;
+				case 5:
+					archie_set_db9mode(1);
+					break;
+				default:
+					archie_set_db9mode(archie_get_db9mode() + 1);
+					break;
+				}
+				menustate = MENU_ARCHIE_MAIN1;
+				break;
+
+			case 10:  // Exit
 				menustate = MENU_NONE1;
 				break;
 			}
@@ -2897,9 +2915,6 @@ void HandleUI(void)
 		snprintf(s, 29, " Cart: %s", tos_get_cartridge_name());
 		OsdWrite(m++, s, menusub == 2);
 
-		if (tos_get_db9type() == 0) {
-			tos_set_db9type(1);
-		}
 		strcpy(s, " UserIO Joys: ");
 		strcat(s, config_db9type_msg[tos_get_db9type()]);
 		OsdWrite(m++, s, menusub == 3, 0);
