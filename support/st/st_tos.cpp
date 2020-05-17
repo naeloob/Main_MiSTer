@@ -62,7 +62,7 @@ static void set_control(uint32_t ctrl)
 	ctrl = uart_mode ? (ctrl | TOS_CONTROL_REDIR0) : (ctrl & ~TOS_CONTROL_REDIR0);
 
 	spi_uio_cmd_cont(UIO_SET_STATUS2);
-	spi32w(ctrl);
+	spi32_w(ctrl);
 	spi8(config.db9type);
 	DisableIO();
 }
@@ -573,7 +573,7 @@ void tos_config_load(int slot)
 
 	// set default values
 	config.system_ctrl = TOS_MEMCONFIG_1M | TOS_CONTROL_VIDEO_COLOR | TOS_CONTROL_BORDER;
-	strcpy(config.tos_img, user_io_get_core_path());
+	strcpy(config.tos_img, HomeDir());
 	strcat(config.tos_img, "/TOS.IMG");
 
 	// try to load config

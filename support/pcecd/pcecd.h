@@ -47,9 +47,9 @@
 #define NSE_AUDIO_NOT_PLAYING		0x2C
 
 #define PCECD_CDDAMODE_SILENT		0x00
-#define PCECD_CDDAMODE_NORMAL		0x01
+#define PCECD_CDDAMODE_LOOP			0x01
 #define PCECD_CDDAMODE_INTERRUPT	0x02
-#define PCECD_CDDAMODE_LOOP			0x03
+#define PCECD_CDDAMODE_NORMAL		0x03
 
 #include "../../cd.h"
 
@@ -94,11 +94,12 @@ private:
 	//uint8_t state;
 	int CDDAStart;
 	int CDDAEnd;
+	int CDDAFirst;
 	uint8_t CDDAMode;
 	sense_t sense;
 
 	uint8_t stat[2];
-	uint8_t comm[12];
+	uint8_t comm[14];
 
 	uint8_t sec_buf[2352 + 2];
 
@@ -128,5 +129,7 @@ void pcecd_set_image(int num, const char *filename);
 int pcecd_send_data(uint8_t* buf, int len, uint8_t index);
 void pcecd_reset();
 int pcecd_using_cd();
+
+#define PCECD_DIR "TGFX16-CD"
 
 #endif
