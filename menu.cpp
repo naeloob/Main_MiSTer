@@ -3281,7 +3281,7 @@ void HandleUI(void)
 				}
 				break;
 
-			case 4:  // TOS
+			case 5:  // TOS
 				SelectFile(Selected_F[menusub], "IMG", SCANO_DIR, MENU_ST_SYSTEM_FILE_SELECTED, MENU_ST_SYSTEM1);
 				break;
 
