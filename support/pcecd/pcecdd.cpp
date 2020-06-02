@@ -32,6 +32,7 @@ pcecdd_t::pcecdd_t() {
 	CDDAStart = 0;
 	CDDAEnd = 0;
 	CDDAMode = PCECD_CDDAMODE_SILENT;
+	region = 0;
 
 	stat[0] = 0x0;
 	stat[1] = 0x0;
@@ -721,7 +722,7 @@ void pcecdd_t::CommandExec() {
 
 	default:
 		CommandError(SENSEKEY_ILLEGAL_REQUEST, NSE_INVALID_COMMAND, 0, 0);
-		PendStatus(PCECD_STATUS_CHECK_COND, 0);
+		SendStatus(PCECD_STATUS_CHECK_COND, 0);
 
 		printf("\x1b[32mPCECD: Command undefined, [0] = %02X, [1] = %02X, [2] = %02X, [3] = %02X, [4] = %02X, [5] = %02X\n\x1b[0m", comm[0], comm[1], comm[2], comm[3], comm[4], comm[5]);
 		break;
@@ -742,6 +743,18 @@ void pcecdd_t::PendStatus(uint8_t status, uint8_t message) {
 	stat[0] = status;
 	stat[1] = message;
 	has_status = 1;
+}
+
+void pcecdd_t::SendStatus(uint16_t status, uint8_t flag) {
+
+	spi_uio_cmd_cont(UIO_CD_SET);
+	spi_w(status);
+	spi_w((flag & 1) | (region ? 2 : 0));
+	DisableIO();
+}
+
+void pcecdd_t::SetRegion(uint8_t rgn) {
+	region = rgn;
 }
 
 void pcecdd_t::LBAToMSF(int lba, msf_t* msf) {
