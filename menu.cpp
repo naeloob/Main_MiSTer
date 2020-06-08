@@ -495,9 +495,6 @@ static uint32_t menu_key_get(void)
 		}
 		c2 = c1;
 
-		// inject a fake "MENU_KEY" if no menu is visible and the menu key is loaded
-		if (!user_io_osd_is_visible() && !video_fb_state() && is_menu()) c = KEY_F12;
-
 		// generate repeat "key-pressed" events
 		if ((c1 & UPSTROKE) || (!c1))
 		{
@@ -906,7 +903,7 @@ void HandleUI(void)
 	minus = false;
 	recent = false;
 
-	if (c && c != KEY_F12 && cfg.bootcore[0] != '\0') cfg.bootcore[0] = '\0';
+	if (c && cfg.bootcore[0] != '\0') cfg.bootcore[0] = '\0';
 
 	if (is_menu())
 	{
@@ -1151,7 +1148,7 @@ void HandleUI(void)
 		// fall through
 	case MENU_ERROR:
 	case MENU_NONE2:
-		if (menu)
+		if (menu || (is_menu() && !video_fb_state()))
 		{
 			page = 0;
 			OsdSetSize(16);
@@ -1345,7 +1342,7 @@ void HandleUI(void)
 		else if (left)
 		{
 			menustate = MENU_8BIT_INFO;
-			menusub = 1;
+			menusub = 2;
 		}
 		break;
 
@@ -1779,9 +1776,15 @@ void HandleUI(void)
 						memcpy(Selected_tmp, Selected_S[ioctl_index & 3], sizeof(Selected_tmp));
 						if (is_pce() || is_megacd())
 						{
+							int num = ScanDirectory(Selected_tmp, SCANF_INIT, fs_pFileExt, 0);
+							memcpy(Selected_tmp, Selected_S[ioctl_index & 3], sizeof(Selected_tmp));
+
+							if (num == 1)
+							{
 							fs_Options |= SCANO_NOENTER;
 							char *p = strrchr(Selected_tmp, '/');
 							if (p) *p = 0;
+						}
 						}
 
 						if (select) SelectFile(Selected_tmp, ext, fs_Options, fs_MenuSelect, fs_MenuCancel);
@@ -1882,7 +1885,7 @@ void HandleUI(void)
 		else if (left && !page)
 		{
 			menustate = MENU_8BIT_INFO;
-			menusub = 1;
+			menusub = 2;
 		}
 		break;
 
@@ -1923,15 +1926,7 @@ void HandleUI(void)
 		}
 		else if (is_megacd())
 		{
-			uint32_t status = user_io_8bit_set_status(0, 0);
-			if (!(status & 4))
-			{
-				user_io_8bit_set_status(1, 1);
-				user_io_8bit_set_status(0, 1);
-				mcd_reset();
-			}
 			mcd_set_image(ioctl_index, selPath);
-			cheats_init(selPath, 0);
 		}
 		else if (is_pce())
 		{
@@ -2581,7 +2576,7 @@ void HandleUI(void)
 	case MENU_8BIT_INFO:
 		OsdSetSize(16);
 		helptext = 0;
-		menumask = 3;
+		menumask = 7;
 		menustate = MENU_8BIT_INFO2;
 		OsdSetTitle("System", OSD_ARROW_RIGHT);
 
@@ -2590,8 +2585,18 @@ void HandleUI(void)
 
 		OsdWrite(3, "         Information");
 
+		m = get_core_volume();
+		{
+			strcpy(s, "     Core Volume: ");
+			memset(s + strlen(s), 0, 10);
+			char *bar = s + strlen(s);
+			memset(bar, 0x8C, 8);
+			memset(bar, 0x7f, 8 - m);
+		}
+		OsdWrite(12, s, menusub == 0);
+
 		m = get_volume();
-		strcpy(s, "      Volume: ");
+		strcpy(s, "   Global Volume: ");
 		if (m & 0x10)
 		{
 			strcat(s, "< Mute >");
@@ -2600,22 +2605,28 @@ void HandleUI(void)
 		{
 			memset(s+strlen(s), 0, 10);
 			char *bar = s + strlen(s);
-			memset(bar, 0x8C, 8);
-			memset(bar, 0x7f, 8 - m);
+			int vol = get_core_volume();
+			memset(bar, 0x8C, 8 - vol);
+			memset(bar, 0x7f, 8 - vol - m);
 		}
+		OsdWrite(13, s, menusub == 1);
 
-		OsdWrite(13, s, menusub == 0);
-		OsdWrite(15, STD_EXIT, menusub == 1, 0, OSD_ARROW_RIGHT);
+		OsdWrite(15, STD_EXIT, menusub == 2, 0, OSD_ARROW_RIGHT);
 		break;
 
 	case MENU_8BIT_INFO2:
 		printSysInfo();
-		if ((select && menusub == 1) || menu)
+		if ((select && menusub == 2) || menu)
 		{
 			menustate = MENU_NONE1;
 			break;
 		}
-		else if(menusub == 0 && (right || left || select))
+		else if(menusub == 0 && (right || left))
+		{
+			set_core_volume(right ? 1 : -1);
+			menustate = MENU_8BIT_INFO;
+		}
+		else if (menusub == 1 && (right || left || select))
 		{
 			set_volume(right ? 1 : left ? -1 : 0);
 			menustate = MENU_8BIT_INFO;
@@ -3079,7 +3090,7 @@ void HandleUI(void)
 		else if (left)
 		{
 			menustate = MENU_8BIT_INFO;
-			menusub = 1;
+			menusub = 2;
 		}
 		else if (select)
 		{
@@ -3683,7 +3694,7 @@ void HandleUI(void)
 		else if (left)
 		{
 			menustate = MENU_8BIT_INFO;
-			menusub = 1;
+			menusub = 2;
 		}
 		break;
 
@@ -5214,8 +5225,9 @@ void HandleUI(void)
 
 			if (cfg.bootcore[0] != '\0')
 			{
-				if (btimeout >= 10)
+				if (btimeout > 0)
 				{
+					OsdWrite(12, "\x81\x81\x81\x81\x81\x81\x81\x81\x81\x81\x81\x81\x81\x81\x81\x81\x81\x81\x81\x81\x81\x81\x81\x81\x81\x81\x81\x81\x81");
 					sprintf(str, " Bootcore -> %s", bootcoretype);
 					OsdWrite(13, str, 0, 0);
 					strcpy(straux, cfg.bootcore);
@@ -5238,7 +5250,7 @@ void HandleUI(void)
 					sprintf(str, "   Press any key to cancel");
 					OsdWrite(15, str, 0, 0);
 					btimeout--;
-					if (btimeout < 10)
+					if (!btimeout)
 					{
 						OsdWrite(13, "", 0, 0);
 						OsdWrite(14, s, 1, 0, 0, 0);
@@ -5330,6 +5342,10 @@ void ScrollLongName(void)
 		{
 			max_len = 20; // __.__.__ remove that from the end
 		}
+		else if (cfg.browse_expand && len < 55)
+		{
+			return;
+		}
 	}
 
 	ScrollText(flist_iSelectedEntry()-flist_iFirstEntry(), flist_SelectedItem()->altname, 0, len, max_len, 1);
@@ -5346,8 +5362,9 @@ void PrintDirectory(int expand)
 	if (expand)
 	{
 		int k = flist_iFirstEntry() + OsdGetSize() - 1;
-		if (flist_nDirEntries() && k == flist_iSelectedEntry() && k <= flist_nDirEntries() &&
-		    strlen(flist_DirItem(k)->altname) > 28 && !flist_DirItem(k)->datecode[0] && flist_DirItem(k)->de.d_type != DT_DIR)
+		if (flist_nDirEntries() && k == flist_iSelectedEntry() && k <= flist_nDirEntries()
+			&& strlen(flist_DirItem(k)->altname) > 28 && !(!cfg.rbf_hide_datecode && flist_DirItem(k)->datecode[0])
+			&& flist_DirItem(k)->de.d_type != DT_DIR)
 		{
 			//make room for last expanded line
 			flist_iFirstEntryInc();

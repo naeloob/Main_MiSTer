@@ -852,7 +852,7 @@ enum QUIRK
 	QUIRK_MADCATZ360,
 	QUIRK_PDSP,
 	QUIRK_PDSP_ARCADE,
-	QUIRK_JAMMASD,
+	QUIRK_JAMMA,
 };
 
 typedef struct
@@ -2636,7 +2636,7 @@ void mergedevs()
 	}
 }
 
-// jammasd have shifted keys: when 1P start is kept pressed, it acts as a shift key,
+// Jammasd/J-PAC/I-PAC have shifted keys: when 1P start is kept pressed, it acts as a shift key,
 // outputting other key signals. Example: 1P start + 2P start = KEY_ESC
 // Shifted keys are passed as normal keyboard keys.
 static struct
@@ -2644,7 +2644,7 @@ static struct
 	uint16_t key;
 	uint16_t player;
 	uint16_t btn;
-} jammasd2joy[] =
+} jamma2joy[] =
 {
 	{KEY_5,         1, 0x120}, // 1P coin
 	{KEY_1,         1, 0x121}, // 1P start (shift key)
@@ -2660,8 +2660,15 @@ static struct
 	{KEY_X,         1, 0x12B}, // 1P 6
 	{KEY_C,         1, 0x12C}, // 1P 7
 	{KEY_V,         1, 0x12D}, // 1P 8
+
 	{KEY_9,         1, 0x12E}, // Test
-	{KEY_F2,        1, 0x12F}, // service
+	{KEY_TAB,       1, 0x12F}, // Tab (shift + 1P right)
+	{KEY_ENTER,     1, 0x130}, // Enter (shift + 1P left)
+	// ~ Tidle supportted?
+	{KEY_P,         1, 0x131}, // P (pause) (shift + 1P down)
+	{KEY_F1,        1, 0x132}, // Service
+	{KEY_F2,        1, 0x133}, // Test
+	{KEY_F3,        1, 0x134}, // Tilt
 
 	{KEY_6,         2, 0x120}, // 2P coin
 	{KEY_2,         2, 0x121}, // 2P start
@@ -2849,10 +2856,10 @@ int input_test(int getchar)
 						// Includes other buttons and axes, works as a full featured gamepad.
 						if (strstr(uniq, "MiSTer-A1")) input[n].quirk = QUIRK_PDSP_ARCADE;
 
-						//JammaSD
-						if (cfg.jammasd_vid && cfg.jammasd_pid && input[n].vid == cfg.jammasd_vid && input[n].pid == cfg.jammasd_pid)
+						//Jamma
+						if (cfg.jamma_vid && cfg.jamma_pid && input[n].vid == cfg.jamma_vid && input[n].pid == cfg.jamma_pid)
 						{
-							input[n].quirk = QUIRK_JAMMASD;
+							input[n].quirk = QUIRK_JAMMA;
 						}
 
 						//Arduino and Teensy devices may share the same VID:PID, so additional field UNIQ is used to differentiate them
@@ -3081,15 +3088,15 @@ int input_test(int getchar)
 									}
 								}
 
-								if (input[dev].quirk == QUIRK_JAMMASD && ev.type == EV_KEY)
+								if (input[dev].quirk == QUIRK_JAMMA && ev.type == EV_KEY)
 								{
 									input[dev].num = 0;
-									for (uint32_t i = 0; i <= sizeof(jammasd2joy) / sizeof(jammasd2joy[0]); i++)
+									for (uint32_t i = 0; i <= sizeof(jamma2joy) / sizeof(jamma2joy[0]); i++)
 									{
-										if (jammasd2joy[i].key == ev.code)
+										if (jamma2joy[i].key == ev.code)
 										{
-											ev.code = jammasd2joy[i].btn;
-											input[dev].num = jammasd2joy[i].player;
+											ev.code = jamma2joy[i].btn;
+											input[dev].num = jamma2joy[i].player;
 											break;
 										}
 									}
