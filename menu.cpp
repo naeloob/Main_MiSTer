@@ -54,6 +54,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "battery.h"
 #include "cheats.h"
 #include "video.h"
+#include "audio.h"
 #include "joymapping.h"
 #include "recent.h"
 #include "support.h"
@@ -164,6 +165,7 @@ enum MENU
 	MENU_8BIT_SYSTEM2,
 	MENU_COEFF_FILE_SELECTED,
 	MENU_GAMMA_FILE_SELECTED,
+	MENU_AFILTER_FILE_SELECTED,
 	MENU_8BIT_INFO,
 	MENU_8BIT_INFO2,
 	MENU_8BIT_ABOUT1,
@@ -199,6 +201,7 @@ const char *config_uart_msg[] = { "     None", "      PPP", "  Console", "     M
 const char *config_midilink_msg[] = { " MIDI Local", "MIDI Remote", "   MFP UART", "" };
 const char *config_uart_baud[] = { "110", "300", "600", "1200", "2400", "9600", "14400", "19200", "31250/MIDI", "38400", "57600", "115200"};
 const char *config_scaler_msg[] = { "Internal","Custom" };
+const char *config_afilter_msg[] = { "Internal","Custom" };
 const char *config_gamma_msg[] = { "Off","On" };
 const char *config_db9type_msg[] = { "--",  "Off", "DB9MD 1 Player", "DB9MD 2 Players", "DB15 1 Player", "DB15 2 Players" }; // Added for DB9 menus
 
@@ -504,7 +507,7 @@ static uint32_t menu_key_get(void)
 		else if (CheckTimer(repeat))
 		{
 			repeat = GetTimer(REPEATRATE);
-			if (GetASCIIKey(c1) || ((menustate == MENU_8BIT_SYSTEM2) && (menusub == 11)))
+			if (GetASCIIKey(c1) || ((menustate == MENU_8BIT_SYSTEM2) && (menusub == 13)))
 			{
 				c = c1;
 				hold_cnt++;
@@ -1956,7 +1959,7 @@ void HandleUI(void)
 			while(1)
 			{
 				n = 0;
-				menumask = 0x3e07;
+				menumask = 0xf807;
 
 				if (!menusub) firstmenu = 0;
 				adjvisible = 0;
@@ -2017,24 +2020,42 @@ void HandleUI(void)
 					MenuWrite(n++, s, menusub == 8, !video_get_gamma_en() || !S_ISDIR(getFileType(GAMMA_DIR)));
 				}
 
+				if (audio_filter_en() >= 0)
+				{
+					MenuWrite(n++);
+					menumask |= 0x600;
+					sprintf(s, " Audio Filter - %s", config_afilter_msg[audio_filter_en() ? 1 : 0]);
+					MenuWrite(n++, s, menusub == 9);
+
+					memset(s, 0, sizeof(s));
+					s[0] = ' ';
+					if (strlen(audio_get_filter())) strncpy(s + 1, audio_get_filter(), 25);
+					else strcpy(s, " < none >");
+
+					while (strlen(s) < 26) strcat(s, " ");
+					strcat(s, " \x16 ");
+
+					MenuWrite(n++, s, menusub == 10, !audio_filter_en() || !S_ISDIR(getFileType(AFILTER_DIR)));
+				}
+
 				if (is_minimig() || is_st())
 				{
-					menumask &= ~0x600;
+					menumask &= ~0x1800;
 				}
 				else
 				{
 					MenuWrite(n++);
-					MenuWrite(n++, " Reset settings", menusub == 9, is_archie());
-					MenuWrite(n++, " Save settings", menusub == 10, 0);
+					MenuWrite(n++, " Reset settings", menusub == 11, is_archie());
+					MenuWrite(n++, " Save settings", menusub == 12, 0);
 				}
 
 				MenuWrite(n++);
 				cr = n;
-				MenuWrite(n++, " Reboot (hold \x16 cold reboot)", menusub == 11);
-				MenuWrite(n++, " About", menusub == 12);
+				MenuWrite(n++, " Reboot (hold \x16 cold reboot)", menusub == 13);
+				MenuWrite(n++, " About", menusub == 14);
 
 				while(n < OsdGetSize() - 1) MenuWrite(n++);
-				MenuWrite(n++, STD_EXIT, menusub == 13, 0, OSD_ARROW_LEFT);
+				MenuWrite(n++, STD_EXIT, menusub == 15, 0, OSD_ARROW_LEFT);
 				sysinfo_timer = 0;
 
 				if (!adjvisible) break;
@@ -2145,6 +2166,19 @@ void HandleUI(void)
 				}
 				break;
 			case 9:
+				audio_set_filter_en(audio_filter_en() ? 0 : 1);
+				menustate = MENU_8BIT_SYSTEM1;
+				break;
+
+			case 10:
+				if (audio_filter_en())
+				{
+					snprintf(Selected_tmp, sizeof(Selected_tmp), AFILTER_DIR"/%s", audio_get_filter());
+					if (!FileExists(Selected_tmp)) snprintf(Selected_tmp, sizeof(Selected_tmp), AFILTER_DIR);
+					SelectFile(Selected_tmp, 0, SCANO_DIR | SCANO_TXT, MENU_AFILTER_FILE_SELECTED, MENU_8BIT_SYSTEM1);
+				}
+				break;
+			case 11:
 				if (!is_archie())
 				{
 					menustate = MENU_RESET1;
@@ -2157,7 +2191,7 @@ void HandleUI(void)
 				}
 				break;
 
-			case 10:
+			case 12:
 				// Save settings
 				menustate = MENU_8BIT_MAIN1;
 				menusub = 0;
@@ -2181,7 +2215,7 @@ void HandleUI(void)
 				}
 				break;
 
-			case 11:
+			case 13:
 				{
 					reboot_req = 1;
 
@@ -2190,11 +2224,11 @@ void HandleUI(void)
 
 					sprintf(s, " Cold Reboot");
 					p = s + 5 - off;
-					MenuWrite(cr, p, menusub == 11, 0);
+					MenuWrite(cr, p, 1, 0);
 				}
 				break;
 
-			case 12:
+			case 14:
 				menustate = MENU_8BIT_ABOUT1;
 				menusub = 0;
 				break;
@@ -2573,6 +2607,20 @@ void HandleUI(void)
 		}
 		break;
 
+	case MENU_AFILTER_FILE_SELECTED:
+		{
+			char *p = strcasestr(selPath, AFILTER_DIR"/");
+			if (!p) audio_set_filter(selPath);
+			else
+			{
+				p += strlen(AFILTER_DIR);
+				while (*p == '/') p++;
+				audio_set_filter(p);
+			}
+			menustate = MENU_8BIT_SYSTEM1;
+		}
+		break;
+
 	case MENU_8BIT_INFO:
 		OsdSetSize(16);
 		helptext = 0;
@@ -2588,6 +2636,7 @@ void HandleUI(void)
 		m = get_core_volume();
 		{
 			strcpy(s, "     Core Volume: ");
+			if (audio_filter_en() >= 0) s[4] = 0x1b;
 			memset(s + strlen(s), 0, 10);
 			char *bar = s + strlen(s);
 			memset(bar, 0x8C, 8);
@@ -2605,7 +2654,7 @@ void HandleUI(void)
 		{
 			memset(s+strlen(s), 0, 10);
 			char *bar = s + strlen(s);
-			int vol = get_core_volume();
+			int vol = (audio_filter_en() < 0) ? get_core_volume() : 0;
 			memset(bar, 0x8C, 8 - vol);
 			memset(bar, 0x7f, 8 - vol - m);
 		}

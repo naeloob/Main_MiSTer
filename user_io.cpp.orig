@@ -32,11 +32,14 @@
 #include "miniz.h"
 #include "cheats.h"
 #include "video.h"
+#include "audio.h"
 
 #include "support.h"
 
-static char core_path[1024];
+static char core_path[1024] = {};
+static char rbf_path[1024] = {};
 
+<<<<<<< HEAD
 uint64_t contador = 0;
 uint64_t last_joy = 0x0;
 uint8_t joy_button1 =0;
@@ -47,8 +50,11 @@ uint8_t joy_left = 0;
 uint8_t joy_right = 0; 
 
 static uint8_t vol_att = 0;
+static uint8_t corevol_att = 0;
 unsigned long vol_set_timeout = 0;
 
+=======
+>>>>>>> Upstream/master
 static fileTYPE sd_image[4] = {};
 static uint64_t buffer_lba[4] = { ULLONG_MAX,ULLONG_MAX,ULLONG_MAX,ULLONG_MAX };
 
@@ -137,9 +143,7 @@ char* user_io_create_config_name()
 	return str;
 }
 
-static char core_name[16 + 1];  // max 16 bytes for core name
-static char core_dir[1024];
-
+static char core_name[32] = {};
 static char filepath_store[1024];
 
 char *user_io_make_filepath(const char *path, const char *filename)
@@ -149,7 +153,7 @@ char *user_io_make_filepath(const char *path, const char *filename)
 	return filepath_store;
 }
 
-static char ovr_name[16 + 1] = {};
+static char ovr_name[32] = {};
 void user_io_name_override(const char* name)
 {
 	snprintf(ovr_name, sizeof(ovr_name), "%s", name);
@@ -157,10 +161,7 @@ void user_io_name_override(const char* name)
 
 void user_io_set_core_name(const char *name)
 {
-	strncpy(core_name, name, 17);
-	strncpy(core_dir, name, 1024);
-	prefixGameDir(core_dir, 1024);
-
+	snprintf(core_name, sizeof(core_name), name);
 	printf("Core name set to \"%s\"\n", core_name);
 }
 
@@ -169,18 +170,26 @@ char *user_io_get_core_name()
 	return core_name;
 }
 
-char *user_io_get_core_path(void)
+char *user_io_get_core_path(const char *suffix, int recheck)
 {
-	return core_dir;
+	static char old_name[256] = {};
+	static char tmp[1024] = {};
+
+	if (!suffix) suffix = (!strcasecmp(core_name, "minimig")) ? "Amiga" : core_name;
+	if (recheck || strcmp(old_name, suffix) || !tmp[0])
+	{
+		strcpy(old_name, suffix);
+		strcpy(tmp, suffix);
+		prefixGameDir(tmp, sizeof(tmp));
+	}
+
+	return tmp;
 }
 
 const char *user_io_get_core_name_ex()
 {
 	switch (user_io_core_type())
 	{
-	case CORE_TYPE_MIST:
-		return "ST";
-
 	case CORE_TYPE_ARCHIE:
 		return "ARCHIE";
 
@@ -195,42 +204,42 @@ const char *user_io_get_core_name_ex()
 }
 
 static int is_menu_type = 0;
-char is_menu_core()
+char is_menu()
 {
 	if (!is_menu_type) is_menu_type = strcasecmp(core_name, "MENU") ? 2 : 1;
 	return (is_menu_type == 1);
 }
 
 static int is_x86_type = 0;
-char is_x86_core()
+char is_x86()
 {
 	if (!is_x86_type) is_x86_type = strcasecmp(core_name, "AO486") ? 2 : 1;
 	return (is_x86_type == 1);
 }
 
 static int is_snes_type = 0;
-char is_snes_core()
+char is_snes()
 {
 	if (!is_snes_type) is_snes_type = strcasecmp(core_name, "SNES") ? 2 : 1;
 	return (is_snes_type == 1);
 }
 
 static int is_cpc_type = 0;
-char is_cpc_core()
+char is_cpc()
 {
 	if (!is_cpc_type) is_cpc_type = strcasecmp(core_name, "amstrad") ? 2 : 1;
 	return (is_cpc_type == 1);
 }
 
 static int is_zx81_type = 0;
-char is_zx81_core()
+char is_zx81()
 {
 	if (!is_zx81_type) is_zx81_type = strcasecmp(core_name, "zx81") ? 2 : 1;
 	return (is_zx81_type == 1);
 }
 
 static int is_neogeo_type = 0;
-char is_neogeo_core()
+char is_neogeo()
 {
 	if (!is_neogeo_type) is_neogeo_type = strcasecmp(core_name, "neogeo") ? 2 : 1;
 	return (is_neogeo_type == 1);
@@ -244,14 +253,21 @@ char is_minimig()
 }
 
 static int is_megacd_type = 0;
-char is_megacd_core()
+char is_megacd()
 {
 	if (!is_megacd_type) is_megacd_type = strcasecmp(core_name, "MEGACD") ? 2 : 1;
 	return (is_megacd_type == 1);
 }
 
+static int is_pce_type = 0;
+char is_pce()
+{
+	if (!is_pce_type) is_pce_type = strcasecmp(core_name, "TGFX16") ? 2 : 1;
+	return (is_pce_type == 1);
+}
+
 static int is_archie_type = 0;
-char is_archie_core()
+char is_archie()
 {
 	if (core_type == CORE_TYPE_ARCHIE) return 1;
 	if (!is_archie_type) is_archie_type = strcasecmp(core_name, "ARCHIE") ? 2 : 1;
@@ -259,17 +275,24 @@ char is_archie_core()
 }
 
 static int is_gba_type = 0;
-char is_gba_core()
+char is_gba()
 {
 	if (!is_gba_type) is_gba_type = strcasecmp(core_name, "GBA") ? 2 : 1;
 	return (is_gba_type == 1);
 }
 
 static int is_c64_type = 0;
-char is_c64_core()
+char is_c64()
 {
 	if (!is_c64_type) is_c64_type = strcasecmp(core_name, "C64") ? 2 : 1;
 	return (is_c64_type == 1);
+}
+
+static int is_st_type = 0;
+char is_st()
+{
+	if (!is_st_type) is_st_type = strcasecmp(core_name, "AtariST") ? 2 : 1;
+	return (is_st_type == 1);
 }
 
 char is_sharpmz()
@@ -298,8 +321,11 @@ static void user_io_read_core_name()
 	is_neogeo_type = 0;
 	is_minimig_type = 0;
 	is_megacd_type = 0;
+	is_pce_type = 0;
 	is_archie_type = 0;
 	is_gba_type = 0;
+	is_c64_type = 0;
+	is_st_type = 0;
 	core_name[0] = 0;
 
 	// get core name
@@ -309,9 +335,6 @@ static void user_io_read_core_name()
 		char *p = user_io_get_confstr(0);
 		if (p && p[0]) strcpy(core_name, p);
 	}
-
-	strcpy(core_dir, !strcasecmp(core_name, "minimig") ? "Amiga" : core_name);
-	prefixGameDir(core_dir, sizeof(core_dir));
 
 	printf("Core name is \"%s\"\n", core_name);
 }
@@ -434,7 +457,7 @@ static void parse_config()
 
 				unsigned long x = getStatus(p+1, status);
 
-				if (is_x86_core())
+				if (is_x86())
 				{
 					if (p[2] == '2') x86_set_fdd_boot(!(x&1));
 				}
@@ -449,7 +472,7 @@ static void parse_config()
 			{
 				// get version string
 				char s[128];
-				strcpy(s, OsdCoreName());
+				strcpy(s, OsdCoreNameGet());
 				strcat(s, " ");
 				substrcpy(s + strlen(s), p, 1);
 				OsdCoreNameSet(s);
@@ -535,10 +558,18 @@ const char* get_rbf_path()
 
 void MakeFile(const char * filename, const char * data)
 {
-        FILE * file;
-        file = fopen(filename, "w");
-        fwrite(data, strlen(data), 1, file);
-        fclose(file);
+	FILE * file;
+	file = fopen(filename, "w");
+	fwrite(data, strlen(data), 1, file);
+	fclose(file);
+}
+
+static void set_uart_alt()
+{
+	if (is_st())
+	{
+		tos_uart_mode((GetUARTMode() < 3) || GetMidiLinkMode() >= 4);
+	}
 }
 
 int GetUARTMode()
@@ -550,6 +581,17 @@ int GetUARTMode()
 	return 0;
 }
 
+void SetUARTMode(int mode)
+{
+	MakeFile("/tmp/CORENAME", user_io_get_core_name_ex());
+	MakeFile("/tmp/UART_SPEED", is_st() ? "19200" : "115200");
+
+	char cmd[32];
+	sprintf(cmd, "uartmode %d", mode & 0xFF);
+	system(cmd);
+	set_uart_alt();
+}
+
 int GetMidiLinkMode()
 {
 	struct stat filestat;
@@ -557,23 +599,29 @@ int GetMidiLinkMode()
 	if (!stat("/tmp/ML_MUNT", &filestat)) return 1;
 	if (!stat("/tmp/ML_TCP", &filestat)) return 2;
 	if (!stat("/tmp/ML_UDP", &filestat)) return 3;
+	if (!stat("/tmp/ML_TCP_ALT", &filestat)) return 4;
+	if (!stat("/tmp/ML_UDP_ALT", &filestat)) return 5;
 	return 0;
 }
 
 void SetMidiLinkMode(int mode)
 {
-        MakeFile("/tmp/CORENAME", user_io_get_core_name_ex());
-        remove("/tmp/ML_FSYNTH");
-        remove("/tmp/ML_MUNT");
-        remove("/tmp/ML_UDP");
-        remove("/tmp/ML_TCP");
-        switch (mode)
-        {
-        case 0: MakeFile("/tmp/ML_FSYNTH", ""); break;
-        case 1: MakeFile("/tmp/ML_MUNT", ""); break;
-        case 2: MakeFile("/tmp/ML_TCP", ""); break;
-        case 3: MakeFile("/tmp/ML_UDP", ""); break;
-        }
+	remove("/tmp/ML_FSYNTH");
+	remove("/tmp/ML_MUNT");
+	remove("/tmp/ML_UDP");
+	remove("/tmp/ML_TCP");
+	remove("/tmp/ML_UDP_ALT");
+	remove("/tmp/ML_TCP_ALT");
+	switch (mode)
+	{
+	case 0: MakeFile("/tmp/ML_FSYNTH", ""); break;
+	case 1: MakeFile("/tmp/ML_MUNT", ""); break;
+	case 2: MakeFile("/tmp/ML_TCP", ""); break;
+	case 3: MakeFile("/tmp/ML_UDP", ""); break;
+		case 4: MakeFile("/tmp/ML_TCP_ALT", ""); break;
+		case 5: MakeFile("/tmp/ML_UDP_ALT", ""); break;
+	}
+	set_uart_alt();
 }
 
 uint16_t sdram_sz(int sz)
@@ -608,7 +656,7 @@ uint16_t sdram_sz(int sz)
 			if(res & 0x4000) printf("*** Debug phase: %d\n", (res & 0x100) ? (res & 0xFF) : -(res & 0xFF));
 			else printf("*** Found SDRAM config: %d\n", res & 7);
 		}
-		else if(!is_menu_core())
+		else if(!is_menu())
 		{
 			printf("*** SDRAM config not found\n");
 		}
@@ -683,6 +731,8 @@ void user_io_init(const char *path, const char *xml)
 	// not the RBF. The RBF will be in arcade, which the user shouldn't
 	// browse
 	strcpy(core_path, xml ? xml : path);
+	strcpy(rbf_path, path);
+
 	if (xml) arcade_override_name(xml);
 
 	memset(sd_image, 0, sizeof(sd_image));
@@ -697,9 +747,7 @@ void user_io_init(const char *path, const char *xml)
 		core_type = CORE_TYPE_8BIT;
 	}
 
-	if ((core_type != CORE_TYPE_DUMB) &&
-		(core_type != CORE_TYPE_MIST) &&
-		(core_type != CORE_TYPE_ARCHIE) &&
+	if ((core_type != CORE_TYPE_ARCHIE) &&
 		(core_type != CORE_TYPE_8BIT) &&
 		(core_type != CORE_TYPE_SHARPMZ))
 	{
@@ -708,7 +756,6 @@ void user_io_init(const char *path, const char *xml)
 		io_ver = 0;
 	}
 
-	spi_init(core_type != CORE_TYPE_UNKNOWN);
 	OsdSetSize(8);
 
 	user_io_read_confstr();
@@ -724,18 +771,16 @@ void user_io_init(const char *path, const char *xml)
 		user_io_8bit_set_status(UIO_STATUS_RESET, UIO_STATUS_RESET);
 	}
 
-	MiSTer_ini_parse();
+	cfg_parse();
 	if (cfg.bootcore[0] != '\0')
 	{
-		bootcore_init(path);
+		bootcore_init(xml ? xml : path);
 	}
 
 	video_mode_load();
 	if(strlen(cfg.font)) LoadFont(cfg.font);
-	FileLoadConfig("Volume.dat", &vol_att, 1);
-	vol_att &= 0x1F;
-	if (!cfg.volumectl) vol_att = 0;
-	spi_uio_cmd8(UIO_AUDVOL, vol_att);
+	load_volume();
+
 	user_io_send_buttons(1);
 
 	switch (core_type)
@@ -744,24 +789,12 @@ void user_io_init(const char *path, const char *xml)
 		printf("Unable to identify core (%x)!\n", core_type);
 		break;
 
-	case CORE_TYPE_DUMB:
-		puts("Identified core without user interface");
-		break;
-
-	case CORE_TYPE_MIST:
-		puts("Identified MiST core");
-		ikbd_init();
-		tos_config_init();
-		tos_upload(NULL);
-		break;
-
 	case CORE_TYPE_ARCHIE:
 		puts("Identified Archimedes core");
 		spi_uio_cmd16(UIO_SET_MEMSZ, sdram_sz(-1));
 		send_rtc(1);
 		user_io_set_core_name("Archie");
 		archie_init();
-		user_io_read_core_name();
 		parse_config();
 		parse_buttons();
 		break;
@@ -770,7 +803,6 @@ void user_io_init(const char *path, const char *xml)
 		puts("Identified Sharp MZ Series core");
 		user_io_set_core_name("sharpmz");
         sharpmz_init();
-		user_io_read_core_name();
 		parse_config();
 		parse_buttons();
 		break;
@@ -782,18 +814,26 @@ void user_io_init(const char *path, const char *xml)
 		{
 			OsdCoreNameSet(user_io_get_core_name());
 
-			printf("Loading config %s\n", name);
 			uint32_t status[2] = { 0, 0 };
-			if (FileLoadConfig(name, status, 8))
+			if (!is_st())
 			{
-				printf("Found config: %08X-%08X\n", status[0], status[1]);
-				status[0] &= ~UIO_STATUS_RESET;
-				user_io_8bit_set_status(status[0], ~UIO_STATUS_RESET, 0);
-				user_io_8bit_set_status(status[1], 0xffffffff, 1);
+				printf("Loading config %s\n", name);
+				if (FileLoadConfig(name, status, 8))
+				{
+					printf("Found config: %08X-%08X\n", status[0], status[1]);
+					status[0] &= ~UIO_STATUS_RESET;
+					user_io_8bit_set_status(status[0], ~UIO_STATUS_RESET, 0);
+					user_io_8bit_set_status(status[1], 0xffffffff, 1);
+				}
+				parse_config();
 			}
-			parse_config();
 
-			if (is_menu_core())
+			if (is_st())
+			{
+				tos_config_load(0);
+				tos_upload(NULL);
+			}
+			else if (is_menu())
 			{
 				user_io_8bit_set_status((cfg.menu_pal) ? 0x10 : 0, 0x10);
 				if (cfg.fb_terminal) video_menu_bg((status[0] >> 1) & 7);
@@ -810,32 +850,34 @@ void user_io_init(const char *path, const char *xml)
 					puts("Identified Minimig V2 core");
 					BootInit();
 				}
-				else if (is_x86_core())
+				else if (is_x86())
 				{
 					x86_config_load();
 					x86_init();
 				}
-				else if (is_archie_core())
+				else if (is_archie())
 				{
 					puts("Identified Archimedes core");
 					archie_init();
 				}
 				else
 				{
+					const char *home = HomeDir();
+
 					if (!strlen(path) || !user_io_file_tx(path, 0, 0, 0, 1))
 					{
-						if (!is_cpc_core())
+						if (!is_cpc())
 						{
 							// check for multipart rom
 							for (char i = 0; i < 4; i++)
 							{
-								sprintf(mainpath, "%s/boot%d.rom", user_io_get_core_path(), i);
+								sprintf(mainpath, "%s/boot%d.rom", home, i);
 								user_io_file_tx(mainpath, i << 6);
 							}
 						}
 
 						// legacy style of rom
-						sprintf(mainpath, "%s/boot.rom", user_io_get_core_path());
+						sprintf(mainpath, "%s/boot.rom", home);
 						if (!user_io_file_tx(mainpath))
 						{
 							strcpy(name + strlen(name) - 3, "ROM");
@@ -854,18 +896,18 @@ void user_io_init(const char *path, const char *xml)
 						if (user_io_use_cheats()) cheats_init("", user_io_get_file_crc());
 					}
 
-					if (is_cpc_core())
+					if (is_cpc())
 					{
 						for (int m = 0; m < 3; m++)
 						{
 							const char *model = !m ? "" : (m == 1) ? "0" : "1";
-							sprintf(mainpath, "%s/boot%s.eZZ", user_io_get_core_path(), model);
+							sprintf(mainpath, "%s/boot%s.eZZ", home, model);
 							user_io_file_tx(mainpath, 0x40 * (m + 1), 0, 1);
-							sprintf(mainpath, "%s/boot%s.eZ0", user_io_get_core_path(), model);
+							sprintf(mainpath, "%s/boot%s.eZ0", home, model);
 							user_io_file_tx(mainpath, 0x40 * (m + 1), 0, 1);
 							for (int i = 0; i < 256; i++)
 							{
-								sprintf(mainpath, "%s/boot%s.e%02X", user_io_get_core_path(), model, i);
+								sprintf(mainpath, "%s/boot%s.e%02X", home, model, i);
 								user_io_file_tx(mainpath, 0x40 * (m + 1), 0, 1);
 							}
 						}
@@ -874,7 +916,7 @@ void user_io_init(const char *path, const char *xml)
 					// check if vhd present
 					for (char i = 0; i < 4; i++)
 					{
-						sprintf(mainpath, "%s/boot%d.vhd", user_io_get_core_path(), i);
+						sprintf(mainpath, "%s/boot%d.vhd", home, i);
 						if (FileExists(mainpath))
 						{
 							user_io_set_index(i << 6);
@@ -882,7 +924,7 @@ void user_io_init(const char *path, const char *xml)
 						}
 					}
 
-					sprintf(mainpath, "%s/boot.vhd", user_io_get_core_path());
+					sprintf(mainpath, "%s/boot.vhd", home);
 					if (FileExists(mainpath))
 					{
 						user_io_set_index(0);
@@ -930,12 +972,9 @@ void user_io_init(const char *path, const char *xml)
 		FileLoadConfig(mainpath, &mode, 4);
 	}
 
-	char cmd[32];
-	system("uartmode 0");
-
+	SetUARTMode(0);
 	SetMidiLinkMode((mode >> 8) & 0xFF);
-	sprintf(cmd, "uartmode %d", mode & 0xFF);
-	system(cmd);
+	SetUARTMode(mode);
 }
 
 static int joyswap = 0;
@@ -951,11 +990,7 @@ int user_io_get_joyswap()
 
 void user_io_analog_joystick(unsigned char joystick, char valueX, char valueY)
 {
-<<<<<<< HEAD
-	uint8_t joy = (joystick>1 || !joyswap) ? joystick : joystick^1;
-=======
 	uint8_t joy = (joystick > 1 || !joyswap) ? joystick : (joystick >= 15) ? (joystick ^ 16) : (joystick ^ 1);
->>>>>>> Upstream/master
 
 	if (core_type == CORE_TYPE_8BIT)
 	{
@@ -974,14 +1009,6 @@ void user_io_digital_joystick(unsigned char joystick, uint32_t map, int newdir)
 {
 	uint8_t joy = (joystick>1 || !joyswap) ? joystick : joystick ^ 1;
 
-	// atari ST handles joystick 0 and 1 through the ikbd emulated by the io controller
-	// but only for joystick 1 and 2
-	if (core_type == CORE_TYPE_MIST)
-	{
-		ikbd_joystick(joy, (uint8_t)map);
-		return;
-	}
-
 	static int use32 = 0;
 	use32 |= map >> 16;
 
@@ -994,51 +1021,6 @@ void user_io_digital_joystick(unsigned char joystick, uint32_t map, int newdir)
 	{
 		user_io_analog_joystick(joystick, (map & 2) ? 128 : (map & 1) ? 127 : 0, (map & 8) ? 128 : (map & 4) ? 127 : 0);
 	}
-}
-
-// transmit serial/rs232 data into core
-void user_io_serial_tx(char *chr, uint16_t cnt)
-{
-	spi_uio_cmd_cont(UIO_SERIAL_OUT);
-	while (cnt--) spi8(*chr++);
-	DisableIO();
-}
-
-char user_io_serial_status(serial_status_t *status_in, uint8_t status_out)
-{
-	uint8_t i, *p = (uint8_t*)status_in;
-
-	spi_uio_cmd_cont(UIO_SERIAL_STAT);
-
-	// first byte returned by core must be "magic". otherwise the
-	// core doesn't support this request
-	if (spi_b(status_out) != 0xa5)
-	{
-		DisableIO();
-		return 0;
-	}
-
-	// read the whole structure
-	for (i = 0; i<sizeof(serial_status_t); i++) *p++ = spi_in();
-
-	DisableIO();
-	return 1;
-}
-
-// transmit midi data into core
-void user_io_midi_tx(char chr)
-{
-	spi_uio_cmd8(UIO_MIDI_OUT, chr);
-}
-
-// send ethernet mac address into FPGA
-void user_io_eth_send_mac(uint8_t *mac)
-{
-	uint8_t i;
-
-	spi_uio_cmd_cont(UIO_ETH_MAC);
-	for (i = 0; i<6; i++) spi8(*mac++);
-	DisableIO();
 }
 
 static uint8_t CSD[16] = { 0xf1, 0x40, 0x40, 0x0a, 0x80, 0x7f, 0xe5, 0xe9, 0x00, 0x00, 0x59, 0x5b, 0x32, 0x00, 0x0e, 0x40 };
@@ -1133,38 +1115,6 @@ uint8_t user_io_ps2_ctl(uint8_t *kbd_ctl, uint8_t *mouse_ctl)
 	return res;
 }
 
-// read 32 bit ethernet status word from FPGA
-uint32_t user_io_eth_get_status(void)
-{
-	uint32_t s;
-
-	spi_uio_cmd_cont(UIO_ETH_STATUS);
-	s = spi_in();
-	s = (s << 8) | spi_in();
-	s = (s << 8) | spi_in();
-	s = (s << 8) | spi_in();
-	DisableIO();
-
-	return s;
-}
-
-// read ethernet frame from FPGAs ethernet tx buffer
-void user_io_eth_receive_tx_frame(uint8_t *d, uint16_t len)
-{
-	spi_uio_cmd_cont(UIO_ETH_FRM_IN);
-	while (len--) *d++ = spi_in();
-	DisableIO();
-}
-
-// write ethernet frame to FPGAs rx buffer
-void user_io_eth_send_rx_frame(uint8_t *s, uint16_t len)
-{
-	spi_uio_cmd_cont(UIO_ETH_FRM_OUT);
-	spi_write(s, len, 0);
-	spi8(0);     // one additional byte to allow fpga to store the previous one
-	DisableIO();
-}
-
 // 16 byte fifo for amiga key codes to limit max key rate sent into the core
 #define KBD_FIFO_SIZE  16   // must be power of 2
 static unsigned short kbd_fifo[KBD_FIFO_SIZE];
@@ -1220,41 +1170,52 @@ void user_io_set_download(unsigned char enable)
 	DisableFpga();
 }
 
-int user_io_file_mount(char *name, unsigned char index, char pre)
+int user_io_file_mount(const char *name, unsigned char index, char pre)
 {
 	int writable = 0;
 	int ret = 0;
 	int len = strlen(name);
 
-	if (!strcasecmp(user_io_get_core_name_ex(), "apple-ii"))
+	if (len)
 	{
-		ret = dsk2nib(name, sd_image + index);
+		if (!strcasecmp(user_io_get_core_name_ex(), "apple-ii"))
+		{
+			ret = dsk2nib(name, sd_image + index);
+		}
+
+		if (!ret)
+		{
+			if (x2trd_ext_supp(name))
+			{
+				ret = x2trd(name, sd_image + index);
+			}
+			else if (is_c64() && len > 4 && !strcasecmp(name + len - 4, ".t64"))
+			{
+				writable = 0;
+				ret = c64_openT64(name, sd_image + index);
+			}
+			else
+			{
+				writable = FileCanWrite(name);
+				ret = FileOpenEx(&sd_image[index], name, writable ? (O_RDWR | O_SYNC) : O_RDONLY);
+			}
+		}
+
+		if (!ret)
+		{
+			printf("Failed to open file %s\n", name);
+		}
+	}
+	else
+	{
+		FileClose(&sd_image[index]);
 	}
 
-	if (!ret)
-	{
-		if (x2trd_ext_supp(name))
-		{
-			ret = x2trd(name, sd_image + index);
-		}
-		else if (is_c64_core() && len > 4 && !strcasecmp(name + len - 4, ".t64"))
-		{
-			writable = 0;
-			ret = c64_openT64(name, sd_image + index);
-		}
-		else
-		{
-			writable = FileCanWrite(name);
-			ret = FileOpenEx(&sd_image[index], name, writable ? (O_RDWR | O_SYNC) : O_RDONLY);
-		}
-	}
-
-	buffer_lba[index] = ULLONG_MAX;
+	buffer_lba[index] = -1;
 
 	if (!ret)
 	{
 		sd_image[index].size = 0;
-		printf("Failed to open file %s\n", name);
 		if (pre)
 		{
 			writable = 1;
@@ -1286,15 +1247,13 @@ int user_io_file_mount(char *name, unsigned char index, char pre)
 
 	if (io_ver)
 	{
-		spi_w((uint16_t)(size));
-		spi_w((uint16_t)(size>>16));
-		spi_w((uint16_t)(size>>32));
-		spi_w((uint16_t)(size>>48));
+		spi32_w(size);
+		spi32_w(size >> 32);
 	}
 	else
 	{
-		spi32le(size);
-		spi32le(size>>32);
+		spi32_b(size);
+		spi32_b(size>>32);
 	}
 	DisableIO();
 
@@ -1656,8 +1615,8 @@ static void check_status_change()
 	if ((stchg & 0xF0) == 0xA0 && last_status_change != (stchg & 0xF))
 	{
 		last_status_change = (stchg & 0xF);
-		uint32_t st0 = spi32w(0);
-		uint32_t st1 = spi32w(0);
+		uint32_t st0 = spi32_w(0);
+		uint32_t st1 = spi32_w(0);
 		DisableIO();
 		user_io_8bit_set_status(st0, ~UIO_STATUS_RESET, 0);
 		user_io_8bit_set_status(st1, 0xFFFFFFFF, 1);
@@ -1888,7 +1847,7 @@ int user_io_file_tx(const char* name, unsigned char index, char opensave, char m
 	// prepare transmission of new file
 	user_io_set_download(1);
 
-	if (is_snes_core() && bytes2send)
+	if (is_snes() && bytes2send)
 	{
 		printf("Load SNES ROM.\n");
 		uint8_t* buf = snes_get_header(&f);
@@ -1912,14 +1871,14 @@ int user_io_file_tx(const char* name, unsigned char index, char opensave, char m
 	if (use_progress) MenuHide();
 
 	int dosend = 1;
-	if (is_gba_core())
+	if (is_gba())
 	{
 		process_ss(name);
 
 		if ((index >> 6) == 1 || (index >> 6) == 2)
 		{
 			fileTYPE fg = {};
-			if (!FileOpen(&fg, user_io_make_filepath(HomeDir, "goomba.rom")))
+			if (!FileOpen(&fg, user_io_make_filepath(HomeDir(), "goomba.rom")))
 			{
 				dosend = 0;
 				Info("Cannot open goomba.rom!");
@@ -1984,11 +1943,13 @@ int user_io_file_tx(const char* name, unsigned char index, char opensave, char m
 	user_io_set_download(0);
 	printf("\n");
 
-	if (is_zx81_core() && index)
+	if (is_zx81() && index)
 	{
 		send_pcolchr(name, (index & 0x1F) | 0x20, 0);
 		send_pcolchr(name, (index & 0x1F) | 0x60, 1);
 	}
+
+	MenuHide();
 	return 1;
 }
 
@@ -2045,17 +2006,20 @@ uint32_t user_io_8bit_set_status(uint32_t new_status, uint32_t mask, int ex)
 		// updated masked bits
 		status[ex] |= new_status & mask;
 
-		if (!io_ver)
+		if (!is_st())
 		{
-			spi_uio_cmd8(UIO_SET_STATUS, status[0]);
-			spi_uio_cmd32(UIO_SET_STATUS2, status[0], 0);
-		}
-		else
-		{
-			spi_uio_cmd_cont(UIO_SET_STATUS2);
-			spi32w(status[0]);
-			spi32w(status[1]);
-			DisableIO();
+			if (!io_ver)
+			{
+				spi_uio_cmd8(UIO_SET_STATUS, status[0]);
+				spi_uio_cmd32(UIO_SET_STATUS2, status[0], 0);
+			}
+			else
+			{
+				spi_uio_cmd_cont(UIO_SET_STATUS2);
+				spi32_w(status[0]);
+				spi32_w(status[1]);
+				DisableIO();
+			}
 		}
 	}
 
@@ -2111,15 +2075,6 @@ void user_io_send_buttons(char force)
 
 	if ((map != key_map) || force)
 	{
-		if ((key_map & (BUTTON1 | BUTTON2)) == BUTTON2 && (map & (BUTTON1 | BUTTON2)) == (BUTTON1 | BUTTON2) && is_menu_core())
-		{
-			if (FileExists(ini_cfg.filename_alt))
-			{
-				altcfg(altcfg() ? 0 : 1);
-				fpga_load_rbf("menu.rbf");
-			}
-		}
-
 		const char *name = get_rbf_path();
 		if (name[0] && (get_key_mod() & (LGUI | LSHIFT)) == (LGUI | LSHIFT) && (key_map & BUTTON2) && !(map & BUTTON2))
 		{
@@ -2131,19 +2086,40 @@ void user_io_send_buttons(char force)
 		}
 
 		//special reset for some cores
-		if ((key_map & BUTTON2) && !(map & BUTTON2))
+		if (!user_io_osd_is_visible() && (key_map & BUTTON2) && !(map & BUTTON2))
 		{
-			if (is_archie_core()) fpga_load_rbf(name[0] ? name : "Archie.rbf");
+			if (is_archie()) fpga_load_rbf(name[0] ? name : "Archie.rbf");
 			if (is_minimig()) minimig_reset();
-			if (is_megacd_core()) mcd_reset();
+			if (is_megacd()) mcd_reset();
+			if (is_pce()) pcecd_reset();
 		}
 
 		key_map = map;
+		if (user_io_osd_is_visible()) map &= ~BUTTON2;
 		spi_uio_cmd16(UIO_BUT_SW, map);
 		printf("sending keymap: %X\n", map);
-		if ((key_map & BUTTON2) && is_x86_core()) x86_init();
+		if ((key_map & BUTTON2) && is_x86()) x86_init();
 	}
 }
+
+void user_io_set_ini(int ini_num)
+{
+	const char *name = rbf_path;
+	const char *xml = strcasecmp(rbf_path, core_path) ? core_path : NULL;
+
+	if (!name[0])
+	{
+		name = "menu.rbf";
+		xml = NULL;
+	}
+
+	if (FileExists(cfg_get_name(ini_num)))
+	{
+		altcfg(ini_num);
+		fpga_load_rbf(name, NULL, xml);
+	}
+}
+
 
 static uint32_t diskled_timer = 0;
 static uint32_t diskled_is_on = 0;
@@ -2180,30 +2156,11 @@ static uint32_t res_timer = 0;
 
 void user_io_poll()
 {
-	if ((core_type != CORE_TYPE_MIST) &&
-		(core_type != CORE_TYPE_ARCHIE) &&
+	if ((core_type != CORE_TYPE_ARCHIE) &&
 		(core_type != CORE_TYPE_SHARPMZ) &&
 		(core_type != CORE_TYPE_8BIT))
 	{
 		return;  // no user io for the installed core
-	}
-
-	if (core_type == CORE_TYPE_MIST)
-	{
-		ikbd_poll();
-
-		unsigned char c = 0;
-
-		// check for incoming serial data. this is directly forwarded to the
-		// arm rs232 and mixes with debug output. Useful for debugging only of
-		// e.g. the diagnostic cartridge
-		spi_uio_cmd_cont(UIO_SERIAL_IN);
-		while (spi_in())
-		{
-			c = spi_in();
-			if (c != 0xff) putchar(c);
-		}
-		DisableIO();
 	}
 
 	user_io_send_buttons(0);
@@ -2295,51 +2252,21 @@ void user_io_poll()
 		}
 	}
 
-	if (core_type == CORE_TYPE_MIST)
+	if (core_type == CORE_TYPE_8BIT && !is_menu())
 	{
-		// do some tos specific monitoring here
-		tos_poll();
-	}
-
-	if (core_type == CORE_TYPE_8BIT && !is_menu_core())
-	{
-		/*
-		unsigned char c = 1, f, p = 0;
-
-		// check for serial data to be sent
-		// check for incoming serial data. this is directly forwarded to the
-		// arm rs232 and mixes with debug output.
-		spi_uio_cmd_cont(UIO_SIO_IN);
-		// status byte is 1000000A with A=1 if data is available
-		if ((f = spi_in(0)) == 0x81)
-		{
-			printf("\033[1;36m");
-
-			// character 0xff is returned if FPGA isn't configured
-			while ((f == 0x81) && (c != 0xff) && (c != 0x00) && (p < 8))
-			{
-				c = spi_in();
-				if (c != 0xff && c != 0x00) printf("%c", c);
-
-				f = spi_in();
-				p++;
-			}
-			printf("\033[0m");
-		}
-		DisableIO();
-		*/
-
 		check_status_change();
 	}
 
 	// sd card emulation
-	if (is_x86_core())
+	if (is_x86())
 	{
 		x86_poll();
 	}
-	else if ((core_type == CORE_TYPE_8BIT || core_type == CORE_TYPE_ARCHIE) && !is_menu_core() && !is_minimig())
+	else if ((core_type == CORE_TYPE_8BIT || core_type == CORE_TYPE_ARCHIE) && !is_menu() && !is_minimig())
 	{
-		static uint8_t buffer[4][512];
+		if (is_st()) tos_poll();
+
+		static uint8_t buffer[4][8192];
 		uint32_t lba;
 		uint16_t req_type = 0;
 		uint16_t c = user_io_sd_get_status(&lba, &req_type);
@@ -2369,14 +2296,12 @@ void user_io_poll()
 				{
 					//printf("SD WR %d on %d\n", lba, disk);
 
-					int done = 0;
-					buffer_lba[disk] = lba;
+					buffer_lba[disk] = -1;
 
 					// Fetch sector data from FPGA ...
 					spi_uio_cmd_cont(UIO_SECTOR_WR);
 					spi_block_read(buffer[disk], fio_size);
 					DisableIO();
-
 
 					if (sd_image[disk].type == 2 && !lba)
 					{
@@ -2387,7 +2312,6 @@ void user_io_poll()
 							if (FileWriteSec(&sd_image[disk], buffer[disk]))
 							{
 								sd_image[disk].size = 512;
-								done = 1;
 							}
 						}
 						else
@@ -2406,7 +2330,6 @@ void user_io_poll()
 							{
 								if (FileWriteSec(&sd_image[disk], buffer[disk]))
 								{
-									done = 1;
 									if (size == lba)
 									{
 										size++;
@@ -2416,8 +2339,6 @@ void user_io_poll()
 							}
 						}
 					}
-
-					if (!done) buffer_lba[disk] = -1;
 				}
 			}
 			else if (c & 0x0701)
@@ -2430,15 +2351,16 @@ void user_io_poll()
 				//printf("SD RD %d on %d, WIDE=%d\n", lba, disk, fio_size);
 
 				int done = 0;
+				uint32_t offset;
 
-				if (buffer_lba[disk] != lba)
+				if ((buffer_lba[disk] == (uint64_t)-1) || lba < buffer_lba[disk] || lba >(buffer_lba[disk] + 15))
 				{
 					if (sd_image[disk].size)
 					{
 						diskled_on();
 						if (FileSeekLBA(&sd_image[disk], lba))
 						{
-							if (FileReadSec(&sd_image[disk], buffer[disk]))
+							if (FileReadAdv(&sd_image[disk], buffer[disk], sizeof(buffer[disk])))
 							{
 								done = 1;
 							}
@@ -2451,9 +2373,17 @@ void user_io_poll()
 					{
 						if (sd_image[disk].type == 2)
 						{
-							if (is_megacd_core())
+							if (is_megacd())
 							{
 								mcd_fill_blanksave(buffer[disk], lba);
+							}
+							else if (is_pce())
+							{
+								memset(buffer[disk], 0, sizeof(buffer[disk]));
+								if (!lba)
+								{
+									memcpy(buffer[disk], "HUBM\x00\x88\x10\x80", 8);
+								}
 							}
 							else
 							{
@@ -2465,34 +2395,21 @@ void user_io_poll()
 							memset(buffer[disk], 0, sizeof(buffer[disk]));
 						}
 					}
+
 					buffer_lba[disk] = lba;
+					offset = 0;
+				}
+				else
+				{
+					offset = (lba - buffer_lba[disk])*512;
 				}
 
-				if (buffer_lba[disk] == lba)
-				{
 					//hexdump(buffer, 32, 0);
 
 					// data is now stored in buffer. send it to fpga
 					spi_uio_cmd_cont(UIO_SECTOR_RD);
-					spi_block_write(buffer[disk], fio_size);
+				spi_block_write(buffer[disk] + offset, fio_size);
 					DisableIO();
-				}
-
-				// just load the next sector now, so it may be prefetched
-				// for the next request already
-				done = 0;
-				if (sd_image[disk].size)
-				{
-					diskled_on();
-					if (FileSeekLBA(&sd_image[disk], lba + 1))
-					{
-						if (FileReadSec(&sd_image[disk], buffer[disk]))
-						{
-							done = 1;
-						}
-					}
-				}
-				if (done) buffer_lba[disk] = lba + 1;
 
 				if (sd_image[disk].type == 2)
 				{
@@ -2502,7 +2419,7 @@ void user_io_poll()
 		}
 	}
 
-	if (core_type == CORE_TYPE_8BIT && !is_menu_core() && !is_minimig() && !is_archie_core())
+	if (core_type == CORE_TYPE_8BIT && !is_menu() && !is_minimig() && !is_archie())
 	{
 		// frequently check ps2 mouse for events
 		if (CheckTimer(mouse_timer))
@@ -2565,7 +2482,7 @@ void user_io_poll()
 				else if (ps2_wheel < -63) ps2_wheel = -63;
 
 				// collect movement info and send at predefined rate
-				if (is_menu_core() && !video_fb_state()) printf("PS2 MOUSE: %x %d %d %d\n", ps2_mouse[0], ps2_mouse[1], ps2_mouse[2], ps2_wheel);
+				if (is_menu() && !video_fb_state()) printf("PS2 MOUSE: %x %d %d %d\n", ps2_mouse[0], ps2_mouse[1], ps2_mouse[2], ps2_wheel);
 
 				if (!osd_is_visible)
 				{
@@ -2583,18 +2500,18 @@ void user_io_poll()
 		}
 	}
 
-	if (is_neogeo_core() && (!rtc_timer || CheckTimer(rtc_timer)))
+	if (is_neogeo() && (!rtc_timer || CheckTimer(rtc_timer)))
 	{
 		// Update once per minute should be enough
 		rtc_timer = GetTimer(60000);
 		send_rtc(1);
 	}
 
-	if (core_type == CORE_TYPE_ARCHIE || is_archie_core()) archie_poll();
+	if (core_type == CORE_TYPE_ARCHIE || is_archie()) archie_poll();
 	if (core_type == CORE_TYPE_SHARPMZ) sharpmz_poll();
 
 	static uint8_t leds = 0;
-	if(use_ps2ctl && !is_minimig() && !is_archie_core())
+	if(use_ps2ctl && !is_minimig() && !is_archie())
 	{
 		leds |= (KBD_LED_FLAG_STATUS | KBD_LED_CAPS_CONTROL);
 
@@ -2726,7 +2643,7 @@ void user_io_poll()
 		}
 	}
 
-	if (CheckTimer(led_timer) && !is_menu_core())
+	if (CheckTimer(led_timer) && !is_menu())
 	{
 		led_timer = GetTimer(LED_FREQ);
 		if (!use_ps2ctl)
@@ -2759,7 +2676,7 @@ void user_io_poll()
 	}
 	else if(CheckTimer(res_timer))
 	{
-		if (is_menu_core())
+		if (is_menu())
 		{
 			static int got_cfg = 0;
 			if (!got_cfg)
@@ -2815,11 +2732,7 @@ void user_io_poll()
 		reboot(1);
 	}
 
-	if (vol_set_timeout && CheckTimer(vol_set_timeout))
-	{
-		vol_set_timeout = 0;
-		FileSaveConfig("Volume.dat", &vol_att, 1);
-	}
+	save_volume();
 
 	if (diskled_is_on && CheckTimer(diskled_timer))
 	{
@@ -2827,7 +2740,8 @@ void user_io_poll()
 		diskled_is_on = 0;
 	}
 
-	if (is_megacd_core()) mcd_poll();
+	if (is_megacd()) mcd_poll();
+	if (is_pce()) pcecd_poll();
 	process_ss(0);
 }
 
@@ -2892,20 +2806,7 @@ static void send_keycode(unsigned short key, int press)
 		return;
 	}
 
-	if (core_type == CORE_TYPE_MIST)
-	{
-		if (press > 1) return;
-
-		uint32_t code = get_atari_code(key);
-		if (code == NONE) return;
-
-		// atari has "break" marker in msb
-		if (!press) code = (code & 0xff) | 0x80;
-		ikbd_keyboard(code);
-		return;
-	}
-
-	if (core_type == CORE_TYPE_ARCHIE || is_archie_core())
+	if (core_type == CORE_TYPE_ARCHIE || is_archie())
 	{
 		if (press > 1) return;
 
@@ -3047,7 +2948,7 @@ void user_io_mouse(unsigned char b, int16_t x, int16_t y, int16_t w)
 			mouse_pos[Y] += y;
 			mouse_flags |= 0x80 | (b & 7);
 		}
-		else if (is_archie_core())
+		else if (is_archie())
 		{
 			archie_mouse(b, x, y);
 		}
@@ -3058,10 +2959,6 @@ void user_io_mouse(unsigned char b, int16_t x, int16_t y, int16_t w)
 			mouse_wheel += w;
 			mouse_flags |= 0x08 | (b & 7);
 		}
-		return;
-
-	case CORE_TYPE_MIST:
-		ikbd_mouse(b, x, y);
 		return;
 
 	case CORE_TYPE_ARCHIE:
@@ -3120,45 +3017,9 @@ void user_io_osd_key_enable(char on)
 	input_switch(-1);
 }
 
-int get_volume()
-{
-	return vol_att & 0x17;
-}
-
-void set_volume(int cmd)
-{
-	if (!cfg.volumectl) return;
-
-	vol_set_timeout = GetTimer(1000);
-
-	vol_att &= 0x17;
-	if(!cmd) vol_att ^= 0x10;
-	else if (vol_att & 0x10) vol_att &= 0xF;
-	else if (cmd < 0 && vol_att < 7) vol_att += 1;
-	else if (cmd > 0 && vol_att > 0) vol_att -= 1;
-
-	spi_uio_cmd8(UIO_AUDVOL, vol_att);
-
-	if (vol_att & 0x10)
-	{
-		Info("\x8d Mute", 1000);
-	}
-	else
-	{
-		char str[32];
-		memset(str, 0, sizeof(str));
-
-		sprintf(str, "\x8d ");
-		char *bar = str + strlen(str);
-		memset(bar, 0x8C, 8);
-		memset(bar, 0x7f, 8 - vol_att);
-		Info(str, 1000);
-	}
-}
-
 void user_io_kbd(uint16_t key, int press)
 {
-	if(is_menu_core()) spi_uio_cmd(UIO_KEYBOARD); //ping the Menu core to wakeup
+	if(is_menu()) spi_uio_cmd(UIO_KEYBOARD); //ping the Menu core to wakeup
 
 	// Win+PrnScr or Alt/Win+ScrLk - screen shot
 	if ((key == KEY_SYSRQ && (get_key_mod() & (RGUI | LGUI))) || (key == KEY_SCROLLLOCK && (get_key_mod() & (LALT | RALT | RGUI | LGUI))))
@@ -3231,7 +3092,7 @@ void user_io_kbd(uint16_t key, int press)
 			uint32_t code = get_ps2_code(key);
 			if (!press)
 			{
-				if (is_menu_core() && !video_fb_state()) printf("PS2 code(break)%s for core: %d(0x%X)\n", (code & EXT) ? "(ext)" : "", code & 255, code & 255);
+				if (is_menu() && !video_fb_state()) printf("PS2 code(break)%s for core: %d(0x%X)\n", (code & EXT) ? "(ext)" : "", code & 255, code & 255);
 
 				if (key == KEY_MENU) key = KEY_F12;
 				if (osd_is_visible) menu_key_set(UPSTROKE | key);
@@ -3241,16 +3102,16 @@ void user_io_kbd(uint16_t key, int press)
 			}
 			else
 			{
-				if (is_menu_core() && !video_fb_state()) printf("PS2 code(make)%s for core: %d(0x%X)\n", (code & EXT) ? "(ext)" : "", code & 255, code & 255);
-				if (!osd_is_visible && !is_menu_core() && key == KEY_MENU && press == 3) open_joystick_setup();
-				else if ((has_menu() || osd_is_visible || (get_key_mod() & (LALT | RALT | RGUI | LGUI))) && (((key == KEY_F12) && ((!is_x86_core() && !is_archie_core()) || (get_key_mod() & (RGUI | LGUI)))) || key == KEY_MENU)) menu_key_set(KEY_F12);
+				if (is_menu() && !video_fb_state()) printf("PS2 code(make)%s for core: %d(0x%X)\n", (code & EXT) ? "(ext)" : "", code & 255, code & 255);
+				if (!osd_is_visible && !is_menu() && key == KEY_MENU && press == 3) open_joystick_setup();
+				else if ((has_menu() || osd_is_visible || (get_key_mod() & (LALT | RALT | RGUI | LGUI))) && (((key == KEY_F12) && ((!is_x86() && !is_archie()) || (get_key_mod() & (RGUI | LGUI)))) || key == KEY_MENU)) menu_key_set(KEY_F12);
 				else if (osd_is_visible)
 				{
 					if (press == 1) menu_key_set(key);
 				}
 				else
 				{
-					if (((code & EMU_SWITCH_1) || ((code & EMU_SWITCH_2) && !use_ps2ctl && !is_archie_core())) && !is_menu_core())
+					if (((code & EMU_SWITCH_1) || ((code & EMU_SWITCH_2) && !use_ps2ctl && !is_archie())) && !is_menu())
 					{
 						if (press == 1)
 						{
