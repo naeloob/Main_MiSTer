@@ -1753,6 +1753,10 @@ void HandleUI(void)
 							p += 2;
 						}
 					}
+					else if (!arcade_sw()->dip_num)
+					{
+						continue;
+					}
 
 					if (p[0] == 'P')
 					{
@@ -3252,13 +3256,7 @@ void HandleUI(void)
 			menustate = MENU_8BIT_INFO;
 			menusub = 3;
 		}
-		else if (select || minus || plus)
-		{
-			switch (menusub)
-			{
-			case 0:
-			case 1:
-				if (select)
+		else if (menusub <= 1 && (select || recent))
 				{
 					if (tos_disk_is_inserted(menusub))
 					{
@@ -3267,11 +3265,18 @@ void HandleUI(void)
 					}
 					else
 					{
-						SelectFile(Selected_F[menusub], "ST ", SCANO_DIR, MENU_ST_FDD_FILE_SELECTED, MENU_ST_MAIN1);
+				fs_Options = SCANO_DIR;
+				fs_MenuSelect = MENU_ST_FDD_FILE_SELECTED;
+				fs_MenuCancel = MENU_ST_MAIN1;
+				strcpy(fs_pFileExt, "ST");
+				if (select) SelectFile(Selected_F[menusub], "ST", fs_Options, fs_MenuSelect, fs_MenuCancel);
+				else if (recent_init(menusub)) menustate = MENU_RECENT1;
 					}
 				}
-				break;
-
+		else if (select || minus || plus)
+		{
+			switch (menusub)
+			{
 			case 2:
 				// remove current write protect bits and increase by one
 				tos_update_sysctrl((tos_system_ctrl() & ~(TOS_CONTROL_FDC_WR_PROT_A | TOS_CONTROL_FDC_WR_PROT_B))
@@ -3342,6 +3347,7 @@ void HandleUI(void)
 
 	case MENU_ST_FDD_FILE_SELECTED:
 		memcpy(Selected_F[menusub], selPath, sizeof(Selected_F[menusub]));
+		recent_update(SelectedDir, selPath, SelectedLabel, menusub);
 		tos_insert_disk(menusub, selPath);
 		menustate = MENU_ST_MAIN1;
 		break;
@@ -3439,18 +3445,18 @@ void HandleUI(void)
 				saved_menustate = 0;
 			}
 		}
-		else if (select || plus || minus)
+		else if (menusub <= 2 && (select || recent))
 		{
-			switch (menusub)
+			if (menusub <= 1)
 			{
-			case 0:
-			case 1:
-				if (select) SelectFile(Selected_S[menusub], "VHD", SCANO_DIR | SCANO_UMOUNT, MENU_ST_HDD_FILE_SELECTED, MENU_ST_SYSTEM1);
-				break;
-
-			case 2:
-				// Cart
-				if (select)
+				fs_Options = SCANO_DIR | SCANO_UMOUNT;
+				fs_MenuSelect = MENU_ST_HDD_FILE_SELECTED;
+				fs_MenuCancel = MENU_ST_SYSTEM1;
+				strcpy(fs_pFileExt, "VHD");
+				if (select) SelectFile(Selected_S[menusub], "VHD", fs_Options, fs_MenuSelect, fs_MenuCancel);
+				else if (recent_init(menusub + 500)) menustate = MENU_RECENT1;
+			}
+			else
 				{
 					if (tos_cartridge_is_inserted())
 					{
@@ -3459,11 +3465,20 @@ void HandleUI(void)
 					}
 					else
 					{
-						SelectFile(Selected_F[menusub], "IMG", SCANO_DIR, MENU_ST_SYSTEM_FILE_SELECTED, MENU_ST_SYSTEM1);
+					fs_Options = SCANO_DIR;
+					fs_MenuSelect = MENU_ST_SYSTEM_FILE_SELECTED;
+					fs_MenuCancel = MENU_ST_SYSTEM1;
+					strcpy(fs_pFileExt, "IMG");
+					if (select) SelectFile(Selected_F[menusub], "IMG", fs_Options, fs_MenuSelect, fs_MenuCancel);
+					else if (recent_init(menusub)) menustate = MENU_RECENT1;
 					}
 				}
-				break;
 
+		}
+		else if (select || plus || minus)
+		{
+			switch (menusub)
+			{
 			case 3:
 				switch (tos_get_db9type())
 				{
@@ -3577,6 +3592,7 @@ void HandleUI(void)
 	case MENU_ST_HDD_FILE_SELECTED:
 		printf("Insert image for disk %d\n", menusub);
 		memcpy(Selected_S[menusub], selPath, sizeof(Selected_S[menusub]));
+		recent_update(SelectedDir, selPath, SelectedLabel, menusub + 500);
 		tos_insert_disk(menusub+2, selPath);
 		menustate = MENU_ST_SYSTEM1;
 		break;
@@ -3592,6 +3608,7 @@ void HandleUI(void)
 		if (menusub == 2)
 		{
 			memcpy(Selected_F[menusub], selPath, sizeof(Selected_F[menusub]));
+			recent_update(SelectedDir, selPath, SelectedLabel, menusub);
 			tos_load_cartridge(selPath);
 			menustate = MENU_ST_SYSTEM1;
 		}
@@ -4011,8 +4028,11 @@ void HandleUI(void)
 			OsdWrite(OsdGetSize() / 2, "   Unmounting the image", 0, 0);
 			OsdUpdate();
 			sleep(1);
+			input_poll(0);
+			menu_key_set(0);
 			selPath[0] = 0;
 			menustate = fs_MenuSelect;
+			break;
 		}
 
 		if (menu)
