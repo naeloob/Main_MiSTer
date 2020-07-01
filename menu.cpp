@@ -557,7 +557,7 @@ static uint32_t menu_key_get(void)
 			{
 				if (get_map_vid() || get_map_pid())
 				{
-					send_map_cmd(KEY_SPACE);
+					send_map_cmd(KEY_ALTERASE);
 				}
 			}
 		}
@@ -3018,7 +3018,9 @@ void HandleUI(void)
 					sprintf(s, "   %s ID: %04x:%04x", get_map_type() ? "Joystick" : "Keyboard", get_map_vid(), get_map_pid());
 					if (get_map_button() > 0 || !joymap_first)
 					{
-						OsdWrite(7, (get_map_type() && !is_menu()) ? "   Space/Menu \x16 Undefine" : "        Space \x16 Undefine");
+						OsdWrite(7, (!get_map_type()) ? "         User \x16 Undefine" :
+							is_menu() ? "   User/Space \x16 Undefine" : "    User/Menu \x16 Undefine");
+
 						if (!get_map_type()) OsdWrite(9);
 					}
 					OsdWrite(5, s);
