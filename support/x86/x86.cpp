@@ -30,6 +30,7 @@
 #include <inttypes.h>
 #include <stdbool.h>
 #include <fcntl.h>
+#include <sys/mman.h>
 #include <time.h>
 
 #include "../../spi.h"
@@ -37,7 +38,7 @@
 #include "../../file_io.h"
 #include "../../fpga_io.h"
 
-#define ALT_CPU_CPU_FREQ 90000000u
+uint32_t cpu_clock;
 
 #define FLOPPY0_BASE     0x8800
 #define HDD0_BASE        0x8840
@@ -47,10 +48,14 @@
 #define PIO_OUTPUT_BASE  0x8860
 #define SOUND_BASE       0x9000
 #define PIT_BASE         0x8880
+#define VGA_BASE         0x8900
 #define RTC_BASE         0x8c00
 #define SD_BASE          0x0A00
 
 #define CFG_VER          2
+
+#define SHMEM_ADDR      0x30000000
+#define BIOS_SIZE       0x10000
 
 typedef struct
 {
@@ -61,6 +66,19 @@ typedef struct
 } x86_config;
 
 static x86_config config;
+
+static uint32_t cpu_get_clock()
+{
+	uint32_t clock;
+
+	EnableIO();
+	spi8(UIO_DMA_WRITE);
+	clock = spi_w(0);
+	clock = (spi_w(0) << 16) | clock;
+	DisableIO();
+
+	return clock ? clock : 90000000;
+}
 
 static uint8_t dma_sdio(int status)
 {
@@ -111,37 +129,34 @@ static void dma_rcvbuf(uint32_t address, uint32_t length, uint32_t *data)
 	DisableIO();
 }
 
+static void* shmem_init(int offset, int size)
+{
+	int fd;
+	if ((fd = open("/dev/mem", O_RDWR | O_SYNC)) == -1) return 0;
+
+	void *shmem = mmap(0, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, SHMEM_ADDR + offset);
+	close(fd);
+
+	if (shmem == (void *)-1)
+	{
+		printf("ao486 share_init: Unable to mmap(/dev/mem)\n");
+		return 0;
+	}
+
+	return shmem;
+}
+
 static int load_bios(const char* name, uint8_t index)
 {
-	fileTYPE f = {};
-	static uint32_t buf[128];
+	printf("BIOS: %s\n", name);
 
-	if (!FileOpen(&f, name)) return 0;
+	void *buf = shmem_init(index ? 0xC0000 : 0xF0000, BIOS_SIZE);
+	if (!buf) return 0;
 
-	unsigned long bytes2send = f.size;
-	printf("BIOS %s, %lu bytes.\n", name, bytes2send);
+	memset(buf, 0, BIOS_SIZE);
+	FileLoad(name, buf, BIOS_SIZE);
+	munmap(buf, BIOS_SIZE);
 
-	EnableIO();
-	spi8(UIO_DMA_WRITE);
-	spi32_w( index ? 0x80C0000 : 0x80F0000 );
-
-	while (bytes2send)
-	{
-		printf(".");
-
-		uint16_t chunk = (bytes2send>512) ? 512 : bytes2send;
-		bytes2send -= chunk;
-
-		FileReadSec(&f, buf);
-
-		chunk = (chunk + 3) >> 2;
-		uint32_t* p = buf;
-		while(chunk--) spi32_w(*p++);
-	}
-	DisableIO();
-	FileClose(&f);
-
-	printf("\n");
 	return 1;
 }
 
@@ -184,12 +199,18 @@ static int img_mount(uint32_t type, char *name)
 {
 	FileClose(get_image(type));
 
-	int writable = FileCanWrite(name);
-	int ret = FileOpenEx(get_image(type), name, writable ? (O_RDWR | O_SYNC) : O_RDONLY);
+	int writable = 0, ret = 0;
+
+	if (strlen(name))
+	{
+		writable = FileCanWrite(name);
+		ret = FileOpenEx(get_image(type), name, writable ? (O_RDWR | O_SYNC) : O_RDONLY);
+		if (!ret) printf("Failed to open file %s\n", name);
+	}
+
 	if (!ret)
 	{
 		get_image(type)->size = 0;
-		printf("Failed to open file %s\n", name);
 		return 0;
 	}
 
@@ -317,11 +338,11 @@ static int fdd_set(char* filename)
 	IOWR(FLOPPY0_BASE, 0x4, floppy_total_sectors);
 	IOWR(FLOPPY0_BASE, 0x5, floppy_heads);
 	IOWR(FLOPPY0_BASE, 0x6, 0); // base LBA
-	IOWR(FLOPPY0_BASE, 0x7, (int)(floppy_wait_cycles / (1000000000.0 / ALT_CPU_CPU_FREQ)));
-	IOWR(FLOPPY0_BASE, 0x8, (int)(1000000.0 / (1000000000.0 / ALT_CPU_CPU_FREQ)));
-	IOWR(FLOPPY0_BASE, 0x9, (int)(1666666.0 / (1000000000.0 / ALT_CPU_CPU_FREQ)));
-	IOWR(FLOPPY0_BASE, 0xA, (int)(2000000.0 / (1000000000.0 / ALT_CPU_CPU_FREQ)));
-	IOWR(FLOPPY0_BASE, 0xB, (int)(500000.0 / (1000000000.0 / ALT_CPU_CPU_FREQ)));
+	IOWR(FLOPPY0_BASE, 0x7, (int)(floppy_wait_cycles / (1000000000.0 / cpu_clock)));
+	IOWR(FLOPPY0_BASE, 0x8, (int)(1000000.0 / (1000000000.0 / cpu_clock)));
+	IOWR(FLOPPY0_BASE, 0x9, (int)(1666666.0 / (1000000000.0 / cpu_clock)));
+	IOWR(FLOPPY0_BASE, 0xA, (int)(2000000.0 / (1000000000.0 / cpu_clock)));
+	IOWR(FLOPPY0_BASE, 0xB, (int)(500000.0 / (1000000000.0 / cpu_clock)));
 	IOWR(FLOPPY0_BASE, 0xC, floppy_media);
 
 	//cmos_set(0x10, CMOS_FDD_TYPE);
@@ -500,6 +521,9 @@ void x86_init()
 {
 	user_io_8bit_set_status(UIO_STATUS_RESET, UIO_STATUS_RESET);
 
+	cpu_clock = cpu_get_clock();
+	IOWR(VGA_BASE, 0, cpu_clock);
+
 	const char *home = HomeDir();
 
 	load_bios(user_io_make_filepath(home, "boot0.rom"), 0);
@@ -515,7 +539,7 @@ void x86_init()
 	257.[9:0]:   cycles in 1 sample: 96000 Hz
 	*/
 
-	double cycle_in_ns = (1000000000.0 / ALT_CPU_CPU_FREQ); //33.333333;
+	double cycle_in_ns = (1000000000.0 / cpu_clock); //33.333333;
     for(int i=0; i<256; i++)
 	{
         double f = 1000000.0 / (256.0-i);
@@ -524,15 +548,15 @@ void x86_init()
         IOWR(SOUND_BASE, i, (int)cycles_in_period);
     }
 
-	IOWR(SOUND_BASE, 256, (int)(80000.0 / (1000000000.0 / ALT_CPU_CPU_FREQ)));
-	IOWR(SOUND_BASE, 257, (int)((1000000000.0/96000.0) / (1000000000.0 / ALT_CPU_CPU_FREQ)));
+	IOWR(SOUND_BASE, 256, (int)(80000.0 / (1000000000.0 / cpu_clock)));
+	IOWR(SOUND_BASE, 257, (int)((1000000000.0/96000.0) / (1000000000.0 / cpu_clock)));
 
 	//-------------------------------------------------------------------------- pit
 	/*
 	0.[7:0]: cycles in sysclock 1193181 Hz
 	*/
 
-	IOWR(PIT_BASE, 0, (int)((1000000000.0/1193181.0) / (1000000000.0 / ALT_CPU_CPU_FREQ)));
+	IOWR(PIT_BASE, 0, (int)((1000000000.0/1193181.0) / (1000000000.0 / cpu_clock)));
 
 	//-------------------------------------------------------------------------- floppy
 
@@ -550,8 +574,8 @@ void x86_init()
     129.[12:0]: cycles in 122.07031 us
     */
 
-	IOWR(RTC_BASE, 128, (int)(1000000000.0 / (1000000000.0 / ALT_CPU_CPU_FREQ)));
-	IOWR(RTC_BASE, 129, (int)(122070.0 / (1000000000.0 / ALT_CPU_CPU_FREQ)));
+	IOWR(RTC_BASE, 128, (int)(1000000000.0 / (1000000000.0 / cpu_clock)));
+	IOWR(RTC_BASE, 129, (int)(122070.0 / (1000000000.0 / cpu_clock)));
 
 	unsigned char translate_mode = 1; //LBA
 	translate_mode = (translate_mode << 6) | (translate_mode << 4) | (translate_mode << 2) | translate_mode;
@@ -742,15 +766,18 @@ void x86_set_image(int num, char *filename)
 	switch (num)
 	{
 	case 0:
+		memset(config.fdd_name, 0, sizeof(config.fdd_name));
 		strcpy(config.fdd_name, filename);
 		fdd_set(filename);
 		break;
 
 	case 2:
+		memset(config.hdd0_name, 0, sizeof(config.hdd0_name));
 		strcpy(config.hdd0_name, filename);
 		break;
 
 	case 3:
+		memset(config.hdd1_name, 0, sizeof(config.hdd1_name));
 		strcpy(config.hdd1_name, filename);
 		break;
 	}
