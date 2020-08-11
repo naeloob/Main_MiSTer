@@ -844,6 +844,7 @@ static int wm_y = 0;
 static int wm_ok = 0;
 static int wm_side = 0;
 static uint16_t wm_pos[4] = {};
+static int page = 0;
 
 void HandleUI(void)
 {
@@ -882,7 +883,6 @@ void HandleUI(void)
 	static int flash_state = 0;
 	static uint32_t dip_submenu;
 	static int need_reset = 0;
-	static int page = 0;
 	static int flat = 0;
 	static int menusub_parent = 0;
 	static char title[32] = {};
@@ -1887,6 +1887,15 @@ void HandleUI(void)
 
 							user_io_8bit_set_status(setStatus(p, status, x), 0xffffffff, ex);
 
+							if (is_x86() && p[1] == 'A')
+							{
+								int mode = GetUARTMode();
+								if (mode != 0)
+								{
+									SetUARTMode(0);
+									SetUARTMode(mode);
+								}
+							}
 							menustate = MENU_8BIT_MAIN1;
 						}
 						else if (((p[0] == 'T') || (p[0] == 'R') || (p[0] == 't') || (p[0] == 'r')) && select)
@@ -2543,7 +2552,7 @@ void HandleUI(void)
 				{
 					if(GetUARTMode() == 3 && GetMidiLinkMode() == 0)
 					{
-						sprintf(Selected_tmp, "/linux/soundfonts");
+						sprintf(Selected_tmp, "linux/soundfonts");
 						SelectFile(Selected_tmp, "SF2", SCANO_DIR | SCANO_TXT, MENU_SFONT_FILE_SELECTED, MENU_UART1);
 					}
 				}
@@ -5930,5 +5939,31 @@ int menu_lightgun_cb(uint16_t type, uint16_t code, int value)
 			return 1;
 		}
 	}
+	return 0;
+}
+
+int menu_allow_cfg_switch()
+{
+	if (user_io_osd_is_visible())
+	{
+		switch (menustate)
+		{
+		case MENU_ST_MAIN2:
+		case MENU_ARCHIE_MAIN2:
+		case MENU_MAIN2:
+		case MENU_8BIT_SYSTEM2:
+		case MENU_SYSTEM2:
+			return 1;
+
+		case MENU_FILE_SELECT2:
+			if (is_menu() && (fs_Options & SCANO_CORES)) return 1;
+			break;
+
+		case MENU_8BIT_MAIN2:
+			if (!page) return 1;
+			break;
+		}
+	}
+
 	return 0;
 }

@@ -1534,10 +1534,13 @@ static void joy_digital(int jnum, uint32_t mask, uint32_t code, char press, int 
 			struct input_event ev;
 			ev.type = EV_KEY;
 			ev.value = press;
+
+			int cfg_switch = menu_allow_cfg_switch() && (osdbtn & JOY_BTN2) && press;
+
 			switch (mask)
 			{
 			case JOY_RIGHT:
-				if (press && (osdbtn & JOY_BTN2))
+				if (cfg_switch)
 				{
 					user_io_set_ini(0);
 					osdbtn = 0;
@@ -1547,7 +1550,7 @@ static void joy_digital(int jnum, uint32_t mask, uint32_t code, char press, int 
 				break;
 
 			case JOY_LEFT:
-				if (press && (osdbtn & JOY_BTN2))
+				if (cfg_switch)
 				{
 					user_io_set_ini(1);
 					osdbtn = 0;
@@ -1557,7 +1560,7 @@ static void joy_digital(int jnum, uint32_t mask, uint32_t code, char press, int 
 				break;
 
 			case JOY_UP:
-				if (press && (osdbtn & JOY_BTN2))
+				if (cfg_switch)
 				{
 					user_io_set_ini(2);
 					osdbtn = 0;
@@ -1567,7 +1570,7 @@ static void joy_digital(int jnum, uint32_t mask, uint32_t code, char press, int 
 				break;
 
 			case JOY_DOWN:
-				if (press && (osdbtn & JOY_BTN2))
+				if (cfg_switch)
 				{
 					user_io_set_ini(3);
 					osdbtn = 0;
@@ -2668,6 +2671,7 @@ void mergedevs()
 	static char str[1024];
 	char phys[64] = {};
 	char uniq[64] = {};
+	char id[64] = {};
 
 	while (fgets(str, sizeof(str), f))
 	{
@@ -2684,10 +2688,14 @@ void mergedevs()
 			if (!strncmp("P: Phys", str, 7)) snprintf(phys, sizeof(phys), "%s", strchr(str, '=') + 1);
 			if (!strncmp("U: Uniq", str, 7)) snprintf(uniq, sizeof(uniq), "%s", strchr(str, '=') + 1);
 
-			if (!strncmp("H: ", str, 3) && phys[0])
+			if (!strncmp("H: ", str, 3))
 			{
+				if (strlen(phys) && strlen(uniq)) snprintf(id, sizeof(id), "%s/%s", phys, uniq);
+				else if (strlen(phys)) strcpy(id, phys);
+				else strcpy(id, uniq);
+
 				char *handlers = strchr(str, '=');
-				if (handlers)
+				if (handlers && id[0])
 				{
 					handlers++;
 					for (int i = 0; i < NUMDEV; i++)
@@ -2698,13 +2706,9 @@ void mergedevs()
 							if (dev)
 							{
 								char idsp[32];
-								strcpy(idsp, dev+1);
+								strcpy(idsp, dev + 1);
 								strcat(idsp, " ");
-								if (strstr(handlers, idsp))
-								{
-									if(uniq[0]) snprintf(input[i].id, sizeof(input[i].id), "%s/%s", phys, uniq);
-									else strcpy(input[i].id, phys);
-								}
+								if (strstr(handlers, idsp)) strcpy(input[i].id, id);
 							}
 						}
 					}
