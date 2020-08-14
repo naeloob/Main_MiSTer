@@ -578,7 +578,7 @@ void SetUARTMode(int mode)
 {
 	mode &= 0xFF;
 
-	if (is_x86()) x86_set_uart_mode(mode != 3);
+	if (is_x86()) x86_set_uart_mode(mode != 3 || GetMidiLinkMode() >= 2);
 
 	MakeFile("/tmp/CORENAME", user_io_get_core_name_ex());
 	MakeFile("/tmp/UART_SPEED", is_st() ? "19200" : (is_x86() && (user_io_8bit_set_status(0, 0, 0) & (1 << 10))) ? "4000000" : "115200");
@@ -619,6 +619,19 @@ void SetMidiLinkMode(int mode)
 		case 5: MakeFile("/tmp/ML_UDP_ALT", ""); break;
 	}
 	set_uart_alt();
+}
+
+void ResetUART()
+{
+	if (uart_mode)
+	{
+		int mode = GetUARTMode();
+		if (mode != 0)
+		{
+			SetUARTMode(0);
+			SetUARTMode(mode);
+		}
+	}
 }
 
 uint16_t sdram_sz(int sz)
@@ -2089,13 +2102,14 @@ void user_io_send_buttons(char force)
 			if (is_minimig()) minimig_reset();
 			if (is_megacd()) mcd_reset();
 			if (is_pce()) pcecd_reset();
+			if (is_x86()) x86_init();
+			ResetUART();
 		}
 
 		key_map = map;
 		if (user_io_osd_is_visible()) map &= ~BUTTON2;
 		spi_uio_cmd16(UIO_BUT_SW, map);
 		printf("sending keymap: %X\n", map);
-		if ((key_map & BUTTON2) && is_x86()) x86_init();
 	}
 }
 

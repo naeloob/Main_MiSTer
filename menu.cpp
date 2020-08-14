@@ -1907,6 +1907,7 @@ void HandleUI(void)
 							if (mask == 1 && is_x86())
 							{
 								x86_init();
+								ResetUART();
 								menustate = MENU_NONE1;
 							}
 							else
@@ -2570,15 +2571,10 @@ void HandleUI(void)
 			case 5:
 				if (select)
 				{
-					int mode = GetUARTMode();
-					if(mode != 0)
-					{
-						SetUARTMode(0);
-						SetUARTMode(mode);
+					ResetUART();
 						menustate = MENU_8BIT_SYSTEM1;
 						menusub = 4;
 					}
-				}
 				break;
 			case 6:
 				if (select)
