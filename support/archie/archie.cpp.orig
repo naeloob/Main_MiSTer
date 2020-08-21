@@ -313,7 +313,10 @@ void archie_init()
 	archie_set_amix(archie_get_amix());
 	archie_set_60(archie_get_60());
 	archie_set_afix(archie_get_afix());
+<<<<<<< HEAD
 	archie_set_db9mode(archie_get_db9mode());
+=======
+
 	if(!config.hdd_img[0][0] || !OpenHardfile(0, config.hdd_img[0]))
 	{
 		memset(config.hdd_img[0], 0, sizeof(config.hdd_img[0]));
@@ -323,6 +326,7 @@ void archie_init()
 	{
 		memset(config.hdd_img[1], 0, sizeof(config.hdd_img[1]));
 	}
+>>>>>>> Upstream/master
 
 	// upload rom file
 	archie_set_rom(config.rom_img);
