@@ -1291,7 +1291,7 @@ void HandleUI(void)
 		strcat(s, archie_get_rom_name());
 		OsdWrite(m++, s, menusub == 4);
 
-		OsdWrite(m++);
+		//OsdWrite(m++);
 
 		strcpy(s, " Aspect ratio:       ");
 		strcat(s, archie_get_ar() ? "16:9" : "4:3");
@@ -1320,7 +1320,7 @@ void HandleUI(void)
 
 		while(m<15) OsdWrite(m++);
 
-		OsdWrite(15, STD_EXIT, menusub == 11, 0);
+		OsdWrite(15, STD_EXIT, menusub == 12, 0);
 		menustate = MENU_ARCHIE_MAIN2;
 		parentstate = MENU_ARCHIE_MAIN1;
 
