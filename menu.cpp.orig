@@ -1265,11 +1265,7 @@ void HandleUI(void)
 		OsdSetTitle(CoreName, OSD_ARROW_RIGHT | OSD_ARROW_LEFT);
 
 		m = 0;
-<<<<<<< HEAD
-		menumask = 0x7ff;
-=======
 		menumask = 0xfff;
->>>>>>> Upstream/master
 
 		strcpy(s, " Floppy 0: ");
 		strncat(s, get_image_name(0) ? get_image_name(0) : "* no disk *",27);
@@ -1295,7 +1291,7 @@ void HandleUI(void)
 		strcat(s, archie_get_rom_name());
 		OsdWrite(m++, s, menusub == 4);
 
-		OsdWrite(m++);
+		//OsdWrite(m++);
 
 		strcpy(s, " Aspect ratio:       ");
 		strcat(s, archie_get_ar() ? "16:9" : "4:3");
@@ -1317,22 +1313,14 @@ void HandleUI(void)
 		sprintf(s, " Swap joysticks:     %s", user_io_get_joyswap() ? "Yes" : "No");
 		OsdWrite(m++, s, menusub == 9);
 		sprintf(s, " Swap mouse btn 2/3: %s", archie_get_mswap() ? "Yes" : "No");
-<<<<<<< HEAD
-		OsdWrite(m++, s, menusub == 8);
+		OsdWrite(m++, s, menusub == 10);
 		sprintf(s, " UserIO Joys: ");
 		strcat(s, config_db9type_msg[archie_get_db9mode()]);
-		OsdWrite(m++, s, menusub == 9);
+		OsdWrite(m++, s, menusub == 11);
 
 		while(m<15) OsdWrite(m++);
 
-		OsdWrite(15, STD_EXIT, menusub == 10, 0);
-=======
-		OsdWrite(m++, s, menusub == 10);
-
-		while(m<15) OsdWrite(m++);
-
-		OsdWrite(15, STD_EXIT, menusub == 11, 0);
->>>>>>> Upstream/master
+		OsdWrite(15, STD_EXIT, menusub == 12, 0);
 		menustate = MENU_ARCHIE_MAIN2;
 		parentstate = MENU_ARCHIE_MAIN1;
 
@@ -1414,8 +1402,7 @@ void HandleUI(void)
 				menustate = MENU_ARCHIE_MAIN1;
 				break;
 
-<<<<<<< HEAD
-			case 9:
+			case 11:
 				switch (archie_get_db9mode())
 				{
 				case 0:
@@ -1431,10 +1418,7 @@ void HandleUI(void)
 				menustate = MENU_ARCHIE_MAIN1;
 				break;
 
-			case 10:  // Exit
-=======
-			case 11:  // Exit
->>>>>>> Upstream/master
+			case 12:  // Exit
 				if (select) menustate = MENU_NONE1;
 				break;
 			}
@@ -2039,10 +2023,19 @@ void HandleUI(void)
 			menustate = MENU_8BIT_SYSTEM1;
 			menusub = 0;
 		}
-		else if (left && !page)
+		else if (left)
 		{
-			menustate = MENU_8BIT_INFO;
-			menusub = 3;
+			if (page)
+			{
+				menustate = MENU_8BIT_MAIN1;
+				menusub = menusub_parent;
+				page = 0;
+			}
+			else
+			{
+				menustate = MENU_8BIT_INFO;
+				menusub = 3;
+			}
 		}
 		break;
 
@@ -3551,7 +3544,7 @@ void HandleUI(void)
 		{
 			menustate = MENU_NONE1;
 		}
-		else if (back)
+		else if (back || left)
 		{
 			menustate = MENU_ST_MAIN1;
 			menusub = 5;
@@ -3762,7 +3755,7 @@ void HandleUI(void)
 		break;
 
 	case MENU_ST_LOAD_CONFIG2:
-		if (menu)
+		if (menu || left)
 		{
 			menustate = MENU_ST_MAIN1;
 			menusub = 6;
@@ -3812,7 +3805,7 @@ void HandleUI(void)
 		break;
 
 	case MENU_ST_SAVE_CONFIG2:
-		if (menu)
+		if (menu || left)
 		{
 			menustate = MENU_ST_MAIN1;
 			menusub = 7;
@@ -4118,7 +4111,7 @@ void HandleUI(void)
 				menusub = 10;
 			}
 		}
-		if (menu) // exit menu
+		if (menu || left) // exit menu
 		{
 			menustate = MENU_MAIN1;
 			menusub = 10;
@@ -4599,7 +4592,7 @@ void HandleUI(void)
 			menusub = 9;
 		}
 		else
-		if (menu) // exit menu
+		if (menu || left) // exit menu
 		{
 			menustate = MENU_MAIN1;
 			menusub = 9;
@@ -4740,20 +4733,10 @@ void HandleUI(void)
 		{
 			menustate = MENU_NONE1;
 		}
-		else if (back)
+		else if (back || left)
 		{
 			menustate = MENU_MAIN1;
 			menusub = 7;
-		}
-		else if (right)
-		{
-			menustate = MENU_SETTINGS_MEMORY1;
-			menusub = 0;
-		}
-		else if (left)
-		{
-			menustate = MENU_SETTINGS_HARDFILE1;
-			menusub = 0;
 		}
 		break;
 
@@ -4847,20 +4830,10 @@ void HandleUI(void)
 		{
 			menustate = MENU_NONE1;
 		}
-		else if (back)
+		else if (back || left)
 		{
 			menustate = MENU_MAIN1;
 			menusub = 8;
-		}
-		else if (right)
-		{
-			menustate = MENU_SETTINGS_VIDEO1;
-			menusub = 0;
-		}
-		else if (left)
-		{
-			menustate = MENU_SETTINGS_CHIPSET1;
-			menusub = 0;
 		}
 		break;
 
@@ -4921,6 +4894,8 @@ void HandleUI(void)
 		break;
 
 	case MENU_SETTINGS_HARDFILE2:
+		saved_menustate = MENU_SETTINGS_HARDFILE1;
+
 		if (select || recent)
 		{
 			if (menusub == 0)
@@ -4964,20 +4939,23 @@ void HandleUI(void)
 			}
 		}
 
+<<<<<<< HEAD
 		if (menu) // return to previous menu
 		{
 			menustate = MENU_MAIN1;
 			menusub = 6;
 		}
 		else if (right)
+=======
+		if (menu)
+>>>>>>> Upstream/master
 		{
-			menustate = MENU_SETTINGS_CHIPSET1;
-			menusub = 0;
+			menustate = MENU_NONE1;
 		}
-		else if (left)
+		else if (back || left)
 		{
-			menustate = MENU_SETTINGS_VIDEO1;
-			menusub = 0;
+			menustate = MENU_MAIN1;
+			menusub = 5;
 		}
 		break;
 
@@ -5144,20 +5122,10 @@ void HandleUI(void)
 		{
 			menustate = MENU_NONE1;
 		}
-		else if (back)
+		else if (back || left)
 		{
 			menustate = MENU_MAIN1;
 			menusub = 9;
-		}
-		else if (right)
-		{
-			menustate = MENU_SETTINGS_HARDFILE1;
-			menusub = 0;
-		}
-		else if (left)
-		{
-			menustate = MENU_SETTINGS_MEMORY1;
-			menusub = 0;
 		}
 		break;
 
