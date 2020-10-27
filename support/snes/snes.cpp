@@ -166,8 +166,18 @@ uint8_t* snes_get_header(fileTYPE *f)
 					}
 				}
 
-				//Rom type: 0-Low, 1-High, 2-ExHigh
-				hdr[1] = (addr == 0x00ffc0) ? 1 : (addr == 0x40ffc0) ? 2 : 0;
+				bool has_bsx_slot = false;
+				if (buf[addr - 14] == 'Z' && buf[addr - 11] == 'J' && 
+					((buf[addr - 13] >= 'A' && buf[addr - 13] <= 'Z') || (buf[addr - 13] >= '0' && buf[addr - 13] <= '9')) &&
+					(buf[addr + Company] == 0x33 || (buf[addr - 10] == 0x00 && buf[addr - 4] == 0x00)) ) {
+					has_bsx_slot = true;
+				}
+
+				//Rom type: 0-Low, 1-High, 2-ExHigh, 3-SpecialLoRom
+				hdr[1] = (addr == 0x00ffc0) ? 1 : 
+						 (addr == 0x40ffc0) ? 2 : 
+						 has_bsx_slot ? 3 : 
+						 0;
 
 				//BSX 3
 				if (is_bsx_bios) {
@@ -280,14 +290,23 @@ void snes_patch_bs_header(fileTYPE *f, uint8_t *buf)
 {
 	if ((f->offset == 0x008000 && (buf[0xFD8] == 0x20 || buf[0xFD8] == 0x30)) ||
 		(f->offset == 0x010000 && (buf[0xFD8] == 0x21 || buf[0xFD8] == 0x31))) {
-		if (buf[0xFD0] == 0xFF && buf[0xFD1] == 0xFF && buf[0xFD2] == 0xFF && buf[0xFD3] == 0xFF) {
+		if (buf[0xFD0] == 0xF0 || (buf[0xFD1] == 0xFF && buf[0xFD2] == 0xFF && buf[0xFD3] == 0xFF)) {
+			printf("SNES: Patch bad BS header: offset %04X, bad value %02X %02X %02X %02X\n", 0x7FD0 | (f->offset == 0x008000 ? 0x0000 : 0x8000), buf[0xFD0], buf[0xFD1], buf[0xFD2], buf[0xFD3]);
 			buf[0xFD3] = 0x00;
 			buf[0xFD2] = 0x00;
 			buf[0xFD1] = 0x00;
 			buf[0xFD0] = f->size <= 256 * 1024 ? 0x03 :
 						 f->size <= 512 * 1024 ? 0x0F :
 						 0xFF;
-			printf("SNES: Patch bad BS header: offset %06X, size %d\n", (int)f->offset, (int)f->size);
+		}
+		if (buf[0xFD5] >= 0x80) {
+			printf("SNES: Patch bad BS header: offset %04X, bad value %02X %02X\n", 0x7FD4 | (f->offset == 0x008000 ? 0x0000 : 0x8000), buf[0xFD4], buf[0xFD5]);
+			buf[0xFD5] = 0xFF;
+			buf[0xFD4] = 0xFF;
+		}
+		if (buf[0xFDA] != 0x33) {
+			printf("SNES: Patch bad BS header: offset %04X, bad value %02X\n", 0x7FDA | (f->offset == 0x008000 ? 0x0000 : 0x8000), buf[0xFDA]);
+			buf[0xFDA] = 0x33;
 		}
 	}
 }
