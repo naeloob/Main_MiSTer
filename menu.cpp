@@ -4069,7 +4069,7 @@ void HandleUI(void)
 				{
 					minimig_config.floppy.speed ^= 1;
 					minimig_ConfigFloppy(minimig_config.floppy.drives, minimig_config.floppy.speed);
-					menustate = MENU_MAIN1;
+					menustate = MENU_MINIMIG_MAIN1;
 				}
 
 				// Added DB9 menus INIT
@@ -4083,7 +4083,7 @@ void HandleUI(void)
 						minimig_config.db9type = minimig_config.db9type + 1 ;
 					}
 					minimig_ConfigDB9Type(minimig_config.db9type);
-					menustate = MENU_MAIN1;	
+					menustate = MENU_MINIMIG_MAIN1;	
 				}
 				// Added DB9 menus END
 
