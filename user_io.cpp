@@ -2609,7 +2609,7 @@ void user_io_poll()
 		}
 	}
 
-	if (core_type == CORE_TYPE_8BIT && !is_menu() && !is_minimig() && !is_archie())
+	if (core_type == CORE_TYPE_8BIT && !is_minimig() && !is_archie())
 	{
 		// frequently check ps2 mouse for events
 		if (CheckTimer(mouse_timer))
