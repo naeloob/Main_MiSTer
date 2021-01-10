@@ -379,7 +379,8 @@ static void ApplyConfiguration(char reloadkickstart)
 	minimig_ConfigVideo(minimig_config.scanlines);
 	minimig_ConfigAudio(minimig_config.audio);
 	minimig_ConfigAutofire(minimig_config.autofire, 0xC);
-	minimig_ConfigDB9Type(minimig_config.db9type);
+	minimig_set_extcfg(minimig_config.ext_cfg & ~1);
+	// minimig_ConfigDB9Type(minimig_config.db9type);
 }
 
 int minimig_cfg_load(int num)
@@ -735,4 +736,19 @@ void minimig_ConfigAutofire(unsigned char autofire, unsigned char mask)
 void minimig_ConfigDB9Type(unsigned int db9type)
 {
 	spi_uio_cmd8(UIO_MM2_DB9TYPE, db9type);
+}
+
+void minimig_set_extcfg(unsigned short ext_cfg)
+{
+	minimig_config.ext_cfg = ext_cfg;
+
+	spi_uio_cmd_cont(UIO_SET_STATUS2);
+	spi32_w(0);
+	spi32_w(ext_cfg);
+	DisableIO();
+}
+
+unsigned short minimig_get_extcfg()
+{
+	return minimig_config.ext_cfg;
 }

@@ -1001,16 +1001,22 @@ void user_io_init(const char *path, const char *xml)
 			OsdCoreNameSet(user_io_get_core_name());
 
 			uint32_t status[2] = { 0, 0 };
-			if (!is_st())
+			if (!is_st() && !is_minimig())
 			{
 				printf("Loading config %s\n", name);
 				if (FileLoadConfig(name, status, 8))
 				{
 					printf("Found config: %08X-%08X\n", status[0], status[1]);
-					status[0] &= ~UIO_STATUS_RESET;
-					user_io_8bit_set_status(status[0], ~UIO_STATUS_RESET, 0);
-					user_io_8bit_set_status(status[1], 0xffffffff, 1);
 				}
+				else
+				{
+					status[0] = 0;
+					status[1] = 0;
+				}
+
+				status[0] &= ~UIO_STATUS_RESET;
+				user_io_8bit_set_status(status[0], ~UIO_STATUS_RESET, 0);
+				user_io_8bit_set_status(status[1], 0xffffffff, 1);
 				parse_config();
 			}
 
@@ -1018,6 +1024,7 @@ void user_io_init(const char *path, const char *xml)
 			{
 				tos_config_load(0);
 				tos_upload(NULL);
+				parse_config();
 			}
 			else if (is_menu())
 			{
@@ -1033,6 +1040,7 @@ void user_io_init(const char *path, const char *xml)
 				}
 				else if (is_minimig())
 				{
+					parse_config();
 					puts("Identified Minimig V2 core");
 					BootInit();
 				}

@@ -31,6 +31,8 @@ typedef struct {
 	char acsi_img[2][1024];
 	char video_adjust[2];
 	char cdc_control_redirect;
+	char reserved;
+	uint32_t ext_ctrl;
 	tos_dbtype_t db9type; // Only used values 0-5
 } tos_config_t;
 
@@ -69,6 +71,7 @@ static void set_control(uint32_t ctrl)
 
 	spi_uio_cmd_cont(UIO_SET_STATUS2);
 	spi32_w(ctrl);
+	spi32_w(config.ext_ctrl);
 	spi8(config.db9type);
 	DisableIO();
 }
@@ -76,6 +79,17 @@ static void set_control(uint32_t ctrl)
 void tos_update_sysctrl(uint32_t ctrl)
 {
 	config.system_ctrl = ctrl;
+	set_control(config.system_ctrl);
+}
+
+uint32_t tos_get_extctrl()
+{
+	return config.ext_ctrl;
+}
+
+void tos_set_extctrl(uint32_t ext_ctrl)
+{
+	config.ext_ctrl = ext_ctrl;
 	set_control(config.system_ctrl);
 }
 
@@ -642,7 +656,7 @@ const char* tos_get_cfg_string(int num)
 	memset(&tmp, 0, sizeof(tmp));
 
 	int len = FileLoadConfig(name, 0, 0);
-	if (len == sizeof(tos_config_t))
+	if (len)
 	{
 		FileLoadConfig(name, &tmp, sizeof(tos_config_t));
 

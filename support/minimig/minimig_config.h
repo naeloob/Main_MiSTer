@@ -44,7 +44,7 @@ typedef struct
 	unsigned long   version;
 	char            kickstart[992];
 	char            label[32];
-	mm_filterTYPE   filter;
+	unsigned short  ext_cfg;
 	unsigned char   memory;
 	unsigned char   chipset;
 	mm_floppyTYPE   floppy;
@@ -64,7 +64,7 @@ typedef struct
 	unsigned long   version;
 	char            kickstart[992];
 	char            label[32];
-	mm_filterTYPE   filter;
+	unsigned short  ext_cfg;
 	unsigned char   memory;
 	unsigned char   chipset;
 	mm_floppyTYPE   floppy;
@@ -101,5 +101,8 @@ void minimig_ConfigChipset(unsigned char chipset);
 void minimig_ConfigFloppy(unsigned char drives, unsigned char speed);
 void minimig_ConfigAutofire(unsigned char autofire, unsigned char mask);
 void minimig_ConfigDB9Type(unsigned int db9type);
+
+void minimig_set_extcfg(unsigned short ext_cfg);
+unsigned short minimig_get_extcfg();
 
 #endif
