@@ -4110,7 +4110,7 @@ void HandleUI(void)
 			if (is_minimig())
 			{
 				menustate = MENU_MINIMIG_MAIN1;
-				menusub = 9;
+				menusub = 10;
 			}
 			else
 			{
@@ -5321,7 +5321,7 @@ void HandleUI(void)
 		else if (back || left)
 		{
 			menustate = MENU_MINIMIG_MAIN1;
-			menusub = 5;
+			menusub = 6;
 		}
 		break;
 
