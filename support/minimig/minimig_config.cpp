@@ -380,7 +380,7 @@ static void ApplyConfiguration(char reloadkickstart)
 	minimig_ConfigAudio(minimig_config.audio);
 	minimig_ConfigAutofire(minimig_config.autofire, 0xC);
 	minimig_set_extcfg(minimig_config.ext_cfg & ~1);
-	// minimig_ConfigDB9Type(minimig_config.db9type);
+	minimig_ConfigDB9Type(minimig_config.db9type);
 }
 
 int minimig_cfg_load(int num)

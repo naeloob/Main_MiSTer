@@ -4250,32 +4250,33 @@ void HandleUI(void)
 		m = 3;
 		sprintf(s, " Floppy disk turbo : %s", minimig_config.floppy.speed ? "on" : "off");
 		OsdWrite(m++, s, menusub == 4, 0);
+
+		// Added DB9 menus INIT
+		if (minimig_config.db9type == 0) minimig_config.db9type =1;
+		sprintf(s, " UserIO Joys: ");
+		strcat(s, config_db9type_msg[minimig_config.db9type & 7]);
+		OsdWrite(m++, s, menusub == 5, 0);
+		// Added DB9 menus END
+
 		OsdWrite(m++);
-		OsdWrite(m++, " Hard disks                \x16", menusub == 5, 0);
-		OsdWrite(m++, " CPU & Chipset             \x16", menusub == 6, 0);
-		OsdWrite(m++, " Memory                    \x16", menusub == 7, 0);
-		OsdWrite(m++, " Audio & Video             \x16", menusub == 8, 0);
+		OsdWrite(m++, " Hard disks                \x16", menusub == 6, 0);
+		OsdWrite(m++, " CPU & Chipset             \x16", menusub == 7, 0);
+		OsdWrite(m++, " Memory                    \x16", menusub == 8, 0);
+		OsdWrite(m++, " Audio & Video             \x16", menusub == 9, 0);
 		//if (spi_uio_cmd16(UIO_GET_OSDMASK, 0) & 1)
 		{
 			menumask |= 0x200;
-			OsdWrite(m++, " MT32-pi                   \x16", menusub == 9);
+			OsdWrite(m++, " MT32-pi                   \x16", menusub == 10);
 		}
 
 		OsdWrite(m++);
-		OsdWrite(m++, " Save configuration        \x16", menusub == 10, 0);
-		OsdWrite(m++, " Load configuration        \x16", menusub == 11, 0);
+		OsdWrite(m++, " Save configuration        \x16", menusub == 11, 0);
+		OsdWrite(m++, " Load configuration        \x16", menusub == 12, 0);
 
 		while (m < 14) OsdWrite(m++);
-		OsdWrite(m++, " Reset", menusub == 12, 0);
+		OsdWrite(m++, " Reset", menusub == 13, 0);
 
-		// Added DB9 menus INIT
-		//if (minimig_config.db9type == 0) minimig_config.db9type =1;
-		//sprintf(s, " UserIO Joys: ");
-		//strcat(s, config_db9type_msg[minimig_config.db9type & 7]);
-		//OsdWrite(m++, s, menusub == 5, 0);
-		// Added DB9 menus END
-
-		OsdWrite(15, STD_EXIT, menusub == 13, 0);
+		OsdWrite(15, STD_EXIT, menusub == 14, 0);
 
 		menustate = MENU_MINIMIG_MAIN2;
 		parentstate = MENU_MINIMIG_MAIN1;
@@ -4333,61 +4334,61 @@ void HandleUI(void)
 				}
 
 				// Added DB9 menus INIT
-				//else if (menusub == 5)	// DB9 Options
-				//{
-				//	if 	(minimig_config.db9type == 0) {
-				//		 minimig_config.db9type = 2;
-				//	} else if (minimig_config.db9type == 5) {
-				//		minimig_config.db9type = 1 ;
-				//	} else {
-				//		minimig_config.db9type = minimig_config.db9type + 1 ;
-				//	}
-				//	minimig_ConfigDB9Type(minimig_config.db9type);
-				//	menustate = MENU_MINIMIG_MAIN1;	
-				//}
+				else if (menusub == 5)	// DB9 Options
+				{
+					if 	(minimig_config.db9type == 0) {
+						 minimig_config.db9type = 2;
+					} else if (minimig_config.db9type == 5) {
+						minimig_config.db9type = 1 ;
+					} else {
+						minimig_config.db9type = minimig_config.db9type + 1 ;
+					}
+					minimig_ConfigDB9Type(minimig_config.db9type);
+					menustate = MENU_MINIMIG_MAIN1;	
+				}
 				// Added DB9 menus END
 
-				else if (menusub == 5)	// Go to harddrives page.
+				else if (menusub == 6)	// Go to harddrives page.
 				{
 					menustate = MENU_MINIMIG_HARDFILE1;
 					menusub = 0;
 				}
-				else if (menusub == 6)
+				else if (menusub == 7)
 				{
 					menustate = MENU_MINIMIG_CHIPSET1;
 					menusub = 0;
 				}
-				else if (menusub == 7)
+				else if (menusub == 8)
 				{
 					menustate = MENU_MINIMIG_MEMORY1;
 					menusub = 0;
 				}
-				else if (menusub == 8)
+				else if (menusub == 9)
 				{
 					menustate = MENU_MINIMIG_VIDEO1;
 					menusub = 0;
 				}
-				else if (menusub == 9)
+				else if (menusub == 10)
 				{
 					menusub = 0;
 					menustate = MENU_MT32PI_MAIN1;
 				}
-				else if (menusub == 10)
+				else if (menusub == 11)
 				{
 					menusub = 0;
 					menustate = MENU_MINIMIG_SAVECONFIG1;
 				}
-				else if (menusub == 11)
+				else if (menusub == 12)
 				{
 					menusub = 0;
 					menustate = MENU_MINIMIG_LOADCONFIG1;
 				}
-				else if (menusub == 12)
+				else if (menusub == 13)
 				{
 					menustate = MENU_NONE1;
 					minimig_reset();
 				}
-				else if (menusub == 13)
+				else if (menusub == 14)
 				{
 					menustate = MENU_NONE1;
 				}
@@ -4479,13 +4480,13 @@ void HandleUI(void)
 			else
 			{
 				menustate = MENU_MINIMIG_MAIN1;
-				menusub = 11;
+				menusub = 10;
 			}
 		}
 		if (menu || left) // exit menu
 		{
 			menustate = MENU_MINIMIG_MAIN1;
-			menusub = 11;
+			menusub = 10;
 		}
 		break;
 
@@ -4963,13 +4964,13 @@ void HandleUI(void)
 
 			if (menusub<10) minimig_cfg_save(menusub);
 			menustate = MENU_MINIMIG_MAIN1;
-			menusub = 10;
+			menusub = 9;
 		}
 		else
 		if (menu || left) // exit menu
 		{
 			menustate = MENU_MINIMIG_MAIN1;
-			menusub = 10;
+			menusub = 9;
 		}
 		break;
 
