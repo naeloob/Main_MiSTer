@@ -51,6 +51,8 @@ uint8_t joy_right = 0;
 static fileTYPE sd_image[4] = {};
 static uint64_t buffer_lba[4] = { ULLONG_MAX,ULLONG_MAX,ULLONG_MAX,ULLONG_MAX };
 
+static int use_save = 0;
+
 // mouse and keyboard emulation state
 static int emu_mode = EMU_NONE;
 
@@ -409,10 +411,12 @@ int user_io_get_joy_transl()
 static int use_cheats = 0;
 static uint32_t ss_base = 0;
 static uint32_t ss_size = 0;
-static uint32_t uart_speeds[10] = {};
-static char uart_speed_labels[10][32] = {};
-static uint32_t midi_speeds[10] = {};
-static char midi_speed_labels[10][32] = {};
+static uint32_t uart_speeds[12] = {};
+static char uart_speed_labels[12][32] = {};
+static uint32_t midi_speeds[12] = {};
+static char midi_speed_labels[12][32] = {};
+static const uint32_t mlink_speeds[12] = { 110, 300, 600, 1200, 2400, 9600, 14400, 19200, 31250, 38400, 57600, 115200 };
+static const char mlink_speed_labels[12][32] = { "110", "300", "600", "1200", "2400", "9600", "14400", "19200", "31250/MIDI", "38400", "57600", "115200" };
 
 static void parse_config()
 {
@@ -677,30 +681,24 @@ void MakeFile(const char * filename, const char * data)
 	fclose(file);
 }
 
-static void set_uart_alt()
-{
-	if (is_st())
-	{
-		tos_uart_mode((GetUARTMode() < 3) || GetMidiLinkMode() >= 4);
-	}
-}
-
 int GetUARTMode()
 {
 	struct stat filestat;
 	if (!stat("/tmp/uartmode1", &filestat)) return 1;
 	if (!stat("/tmp/uartmode2", &filestat)) return 2;
 	if (!stat("/tmp/uartmode3", &filestat)) return 3;
+	if (!stat("/tmp/uartmode4", &filestat)) return 4;
+	if (!stat("/tmp/uartmode5", &filestat)) return 5;
 	return 0;
 }
 
 void SetUARTMode(int mode)
 {
-	mode &= 0xFF;
+	mode &= 0xF;
 	uint32_t baud = GetUARTbaud(mode);
 
 	spi_uio_cmd_cont(UIO_SET_UART);
-	spi_w(mode);
+	spi_w((mode == 4 || mode == 5) ? 1 : mode);
 	spi_w(baud);
 	spi_w(baud>>16);
 	DisableIO();
@@ -714,42 +712,64 @@ void SetUARTMode(int mode)
 	char cmd[32];
 	sprintf(cmd, "uartmode %d", mode);
 	system(cmd);
-	set_uart_alt();
 }
 
 static int uart_speed_idx = 0;
 static int midi_speed_idx = 0;
+static int mlink_speed_idx = 0;
 
-uint32_t* GetUARTbauds(int mode)
+const uint32_t* GetUARTbauds(int mode)
 {
-	return (mode >= 3) ? midi_speeds : uart_speeds;
+	return (mode == 3) ? midi_speeds : (mode > 3) ? mlink_speeds : uart_speeds;
 }
 
 uint32_t GetUARTbaud(int mode)
 {
-	return (mode >= 3) ? midi_speeds[midi_speed_idx] : uart_speeds[uart_speed_idx];
+	return (mode == 3) ? midi_speeds[midi_speed_idx] : (mode > 3) ? mlink_speeds[mlink_speed_idx] : uart_speeds[uart_speed_idx];
 }
 
-char* GetUARTbaud_label(int mode)
+const char* GetUARTbaud_label(int mode)
 {
-	return (mode >= 3) ? midi_speed_labels[midi_speed_idx] : uart_speed_labels[uart_speed_idx];
+	return (mode == 3) ? midi_speed_labels[midi_speed_idx] : (mode > 3) ? mlink_speed_labels[mlink_speed_idx] : uart_speed_labels[uart_speed_idx];
 }
 
-char* GetUARTbaud_label(int mode, int idx)
+const char* GetUARTbaud_label(int mode, int idx)
 {
-	return (mode >= 3) ? midi_speed_labels[idx] : uart_speed_labels[idx];
+	return (mode == 3) ? midi_speed_labels[idx] : (mode > 3) ? mlink_speed_labels[idx] : uart_speed_labels[idx];
 }
 
 int GetUARTbaud_idx(int mode)
 {
-	return (mode >= 3) ? midi_speed_idx : uart_speed_idx;
+	return (mode == 3) ? midi_speed_idx : (mode > 3) ? mlink_speed_idx : uart_speed_idx;
+}
+
+char * GetMidiLinkSoundfont()
+{
+    FILE * file;
+    static char mLinkSoundfont[255];
+    char fileName[] = "/tmp/ML_SOUNDFONT";
+    char strip[] = "/media/fat/";
+    file = fopen(fileName, "r");
+    if (file)
+    {
+        fgets((char *) &mLinkSoundfont, sizeof(mLinkSoundfont), file);
+        fclose(file);
+        if(0 == strncmp(strip, mLinkSoundfont, sizeof(strip)-1))
+		return &mLinkSoundfont[sizeof(strip)-1];
+    }
+    else
+    {
+        printf("ERROR: GetMidiLinkSoundfont : Unable to open --> '%s'\n", fileName);
+        sprintf(mLinkSoundfont, "linux/soundfonts");
+    }
+    return mLinkSoundfont;
 }
 
 uint32_t ValidateUARTbaud(int mode, uint32_t baud)
 {
-	uint32_t *bauds = GetUARTbauds(mode);
+	const uint32_t *bauds = GetUARTbauds(mode);
 	int idx = 0;
-	for (int i = 0; i < 10; i++)
+	for (int i = 0; i < 12; i++)
 	{
 		if (!bauds[i]) break;
 		if (bauds[i] == baud)
@@ -759,7 +779,8 @@ uint32_t ValidateUARTbaud(int mode, uint32_t baud)
 		}
 	}
 
-	if (mode >= 3) midi_speed_idx = idx;
+	if (mode == 3) midi_speed_idx = idx;
+	else if (mode > 3) mlink_speed_idx = idx;
 	else uart_speed_idx = idx;
 
 	return bauds[idx];
@@ -770,10 +791,11 @@ int GetMidiLinkMode()
 	struct stat filestat;
 	if (!stat("/tmp/ML_FSYNTH", &filestat)) return 0;
 	if (!stat("/tmp/ML_MUNT", &filestat)) return 1;
-	if (!stat("/tmp/ML_TCP", &filestat)) return 2;
+	if (!stat("/tmp/ML_SERMIDI", &filestat)) return 2;
 	if (!stat("/tmp/ML_UDP", &filestat)) return 3;
-	if (!stat("/tmp/ML_TCP_ALT", &filestat)) return 4;
+	if (!stat("/tmp/ML_TCP", &filestat))     return 4;
 	if (!stat("/tmp/ML_UDP_ALT", &filestat)) return 5;
+	if (!stat("/tmp/ML_USBSER", &filestat))  return 6;
 	return 0;
 }
 
@@ -782,19 +804,26 @@ void SetMidiLinkMode(int mode)
 	remove("/tmp/ML_FSYNTH");
 	remove("/tmp/ML_MUNT");
 	remove("/tmp/ML_UDP");
-	remove("/tmp/ML_TCP");
+	remove("/tmp/ML_USBMIDI");
 	remove("/tmp/ML_UDP_ALT");
 	remove("/tmp/ML_TCP_ALT");
+	remove("/tmp/ML_SERMIDI");
+	remove("/tmp/ML_USBSER");
+	remove("/tmp/ML_TCP");
+
+	struct stat filestat;
+	if (mode == 6 && stat("/dev/ttyUSB0", &filestat)) mode = 4;
+
 	switch (mode)
 	{
 	case 0: MakeFile("/tmp/ML_FSYNTH", ""); break;
 	case 1: MakeFile("/tmp/ML_MUNT", ""); break;
-	case 2: MakeFile("/tmp/ML_TCP", ""); break;
+		case 2: MakeFile("/tmp/ML_SERMIDI", ""); break;
 	case 3: MakeFile("/tmp/ML_UDP", ""); break;
-		case 4: MakeFile("/tmp/ML_TCP_ALT", ""); break;
+		case 4: MakeFile("/tmp/ML_TCP", "");     break;
 		case 5: MakeFile("/tmp/ML_UDP_ALT", ""); break;
+		case 6: MakeFile("/tmp/ML_USBSER", "");  break;
 	}
-	set_uart_alt();
 }
 
 void ResetUART()
@@ -1180,13 +1209,19 @@ void user_io_init(const char *path, const char *xml)
 
 		ValidateUARTbaud(1, speeds & 0xFFFFFFFF);
 		ValidateUARTbaud(3, speeds >> 32);
+		ValidateUARTbaud(4, uart_speeds[0]);
 
-		printf("UART bauds: %d/%d\n", GetUARTbaud(1), GetUARTbaud(3));
+		printf("UART bauds: %d/%d/%d\n", GetUARTbaud(1), GetUARTbaud(3), GetUARTbaud(4));
 	}
 
 	SetUARTMode(0);
-	SetMidiLinkMode((mode >> 8) & 0xFF);
-	SetUARTMode(mode);
+	int midilink = (mode >> 8) & 0xFF;
+	int uartmode = mode & 0xFF;
+	if (uartmode == 4 && (midilink < 4 || midilink>6)) midilink = 4;
+	if (uartmode == 3 && midilink > 3) midilink = 0;
+	if (uartmode < 3 || uartmode > 4) midilink = 0;
+	SetMidiLinkMode(midilink);
+	SetUARTMode(uartmode);
 }
 
 static int joyswap = 0;
@@ -1475,6 +1510,7 @@ int user_io_file_mount(const char *name, unsigned char index, char pre)
 	}
 
 	buffer_lba[index] = -1;
+	if (!index) use_save = pre;
 
 	if (!ret)
 	{
@@ -2687,6 +2723,8 @@ void user_io_poll()
 				if(c & 0x04)
 				{
 					//printf("SD WR %d on %d\n", lba, disk);
+
+					if (use_save) menu_process_save();
 
 					buffer_lba[disk] = -1;
 
